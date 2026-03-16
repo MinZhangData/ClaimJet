@@ -108,10 +108,13 @@ class FlightVerifier:
         """
         try:
             # Call AviationStack API
-            # Note: Free tier doesn't support historical dates, only current/upcoming
-            params = {"access_key": self.access_key, "flight_iata": flight_number}
+            params = {
+                "access_key": self.access_key,
+                "flight_iata": flight_number,
+                "limit": 100,
+            }
 
-            # Only add date if it's today or future (free tier limitation)
+            # Try to add date parameter (works on paid plans)
             if flight_date:
                 params["flight_date"] = flight_date
 
@@ -119,11 +122,35 @@ class FlightVerifier:
 
             # Check for API errors
             if response.status_code == 403:
-                return {
-                    "success": False,
-                    "error": "API access denied. Free tier may not support historical date queries. Try without specifying a date for current/upcoming flights.",
-                    "error_type": "api_forbidden",
-                }
+                api_data = response.json()
+                error_msg = api_data.get("error", {}).get(
+                    "message", "API access denied"
+                )
+
+                # If date parameter caused the error, retry without it
+                if flight_date and "subscription" in error_msg.lower():
+                    # Retry without date parameter
+                    params_no_date = {
+                        "access_key": self.access_key,
+                        "flight_iata": flight_number,
+                        "limit": 100,
+                    }
+                    response = requests.get(
+                        self.API_BASE_URL, params=params_no_date, timeout=10
+                    )
+
+                    if response.status_code != 200:
+                        return {
+                            "success": False,
+                            "error": f"Free tier API cannot query specific dates. Requested: {flight_date}. Available: recent flights only. Upgrade to paid plan for historical data.",
+                            "error_type": "api_limitation",
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "error": error_msg,
+                        "error_type": "api_forbidden",
+                    }
 
             response.raise_for_status()
             api_data = response.json()
@@ -154,11 +181,16 @@ class FlightVerifier:
                 if matching_flights:
                     flight = matching_flights[0]
                 else:
-                    # Use first flight but add warning
-                    flight = flights[0]
-                    flight["_date_mismatch"] = True
+                    # No exact match - show available dates
+                    available_dates = list(set([f.get("flight_date") for f in flights]))
+                    return {
+                        "success": False,
+                        "error": f"Flight {flight_number} not found for {flight_date}. Available: {', '.join(sorted(available_dates))}. Note: Free tier shows recent flights only.",
+                        "error_type": "date_not_available",
+                        "available_dates": available_dates,
+                    }
             else:
-                # Use first flight result
+                # Use most recent flight
                 flight = flights[0]
 
             # Extract flight information
@@ -326,7 +358,20 @@ class FlightVerifier:
             Formatted decision message
         """
         if not result.get("success"):
-            return f"❌ Error: {result.get('error', 'Unknown error')}"
+            error_msg = f"❌ Error: {result.get('error', 'Unknown error')}"
+
+            # Add helpful suggestion for date limitations
+            if result.get("error_type") in ["api_limitation", "date_not_available"]:
+                available = result.get("available_dates", [])
+                error_msg += "\n\n💡 **Alternative Options:**\n"
+                if available:
+                    error_msg += (
+                        f"1. Check available dates: {', '.join(sorted(available))}\n"
+                    )
+                error_msg += "2. Use manual entry: Tell me your flight delay details (route, delay hours)\n"
+                error_msg += "3. Upgrade API plan for historical data access\n"
+
+            return error_msg
 
         message = f"""
 ✈️ **Flight Verification Result**
