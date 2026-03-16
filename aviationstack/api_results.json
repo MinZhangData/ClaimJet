@@ -1,46 +1,56 @@
 {
-  "flight_date": "2026-03-17",
-  "flight_status": "scheduled",
-  "departure": {
-    "airport": "Itami",
-    "timezone": "Asia/Tokyo",
-    "iata": "ITM",
-    "icao": "RJOO",
-    "terminal": null,
-    "gate": "6",
-    "delay": 300,
-    "scheduled": "2026-03-17T10:00:00+00:00",
-    "estimated": "2026-03-17T10:00:00+00:00",
-    "actual": null,
-    "estimated_runway": null,
-    "actual_runway": null
+  "pagination": {
+    "limit": 100,
+    "offset": 0,
+    "count": 1,
+    "total": 1
   },
-  "arrival": {
-    "airport": "Kochi",
-    "timezone": "Asia/Tokyo",
-    "iata": "KCZ",
-    "icao": "RJOK",
-    "terminal": null,
-    "gate": null,
-    "baggage": null,
-    "scheduled": "2026-03-17T10:45:00+00:00",
-    "delay": null,
-    "estimated": null,
-    "actual": null,
-    "estimated_runway": null,
-    "actual_runway": null
-  },
-  "airline": {
-    "name": "ANA",
-    "iata": "NH",
-    "icao": "ANA"
-  },
-  "flight": {
-    "number": "1605",
-    "iata": "NH1605",
-    "icao": "ANA1605",
-    "codeshared": null
-  },
-  "aircraft": null,
-  "live": null
+  "data": [
+    {
+      "flight_date": "2026-03-17",
+      "flight_status": "scheduled",
+      "departure": {
+        "airport": "Itami",
+        "timezone": "Asia/Tokyo",
+        "iata": "ITM",
+        "icao": "RJOO",
+        "terminal": null,
+        "gate": "6",
+        "delay": 300,
+        "scheduled": "2026-03-17T10:00:00+00:00",
+        "estimated": "2026-03-17T10:00:00+00:00",
+        "actual": null,
+        "estimated_runway": null,
+        "actual_runway": null
+      },
+      "arrival": {
+        "airport": "Kochi",
+        "timezone": "Asia/Tokyo",
+        "iata": "KCZ",
+        "icao": "RJOK",
+        "terminal": null,
+        "gate": null,
+        "baggage": null,
+        "scheduled": "2026-03-17T10:45:00+00:00",
+        "delay": 320,
+        "estimated": null,
+        "actual": null,
+        "estimated_runway": null,
+        "actual_runway": null
+      },
+      "airline": {
+        "name": "ANA",
+        "iata": "NH",
+        "icao": "ANA"
+      },
+      "flight": {
+        "number": "1605",
+        "iata": "NH1605",
+        "icao": "ANA1605",
+        "codeshared": null
+      },
+      "aircraft": null,
+      "live": null
+    }
+  ]
 }
