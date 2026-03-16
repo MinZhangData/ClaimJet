@@ -12,6 +12,7 @@ DelaySlayer is a shared AI + rules engine that evaluates flight delay complaints
 - a **passenger-facing self-service workflow** for Schiphol travelers
 
 EU 261/2004 establishes common EU rules on compensation and assistance for denied boarding, cancellation, and long delay of flights. Public EU passenger-rights guidance states that passengers may be entitled to compensation when they reach their final destination with a delay of **3 hours or more**, unless the delay was caused by extraordinary circumstances. KLM’s public policy describes similar criteria for delayed-flight compensation. 
+
 ---
 
 ## 2. Goals
@@ -181,7 +182,12 @@ INTAKE → STRUCTURING → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL →
 - reported cause (technical, weather, ATC, etc.)
 - extraordinary circumstance flag
 
-**Integration:** Query external flight database (IATA, airline ops) or rules DB. Flag unverifiable cases for escalation.
+**Integration:** Aviationstack API (enterprise plan)
+- Query `/flights` endpoint by flight number, date, and origin/destination
+- Extract: `scheduled_departure`, `actual_departure`, `status`, `aircraft_type`
+- Fallback to scheduled times if actual times unavailable; confidence score accordingly
+- Cache flight records for 1 hour to minimize API calls (quota: 100k/month)
+- Flag unverifiable cases (missing flight records, API errors) for manual review
 
 ---
 
@@ -341,27 +347,203 @@ POST /v1/cases/{id}/escalate
 
 ## 11. Deployment & operations
 
-**Tech stack:**
-- Backend: Node.js / Python + async workers
-- Database: PostgreSQL (cases, audit) + Redis (cache)
-- LLM: Claude API via inference service
-- Message queue: optional event streaming for async workflows
+**Platform:** Google Cloud Run (serverless, auto-scaling containers)
 
-**Scaling:**
-- API Gateway: horizontal autoscaling on CPU/memory
-- Agents: async queue workers, scale on backlog depth
-- Database: read replicas for reporting
+**Tech stack:**
+- Backend: Node.js / Python + async workers (Cloud Run services)
+- Database: Cloud SQL PostgreSQL (cases, audit) + Memorystore Redis (cache)
+- LLM: Claude API via inference service
+- Message queue: Cloud Tasks or Pub/Sub for async workflows
+- External APIs: Aviationstack (flight data), Claude API
+
+**Cloud Run configuration:**
+- API Gateway on Cloud Run (autoscale 0–100 instances, CPU: 2, memory: 2GB)
+- Claims Orchestrator on Cloud Run (autoscale 1–50 instances, CPU: 2, memory: 4GB)
+- Agents (1–4) on Cloud Run (autoscale 1–20 instances per agent, CPU: 2, memory: 2GB)
+- Cloud SQL connection pooling via Cloud SQL Auth proxy
+- Logging to Cloud Logging; structured JSON logs for audit trail
+
+**Scaling & resilience:**
+- Cloud Run auto-scales on CPU and request latency
+- Cloud SQL high-availability with automated failover
+- Redis cluster mode for cache failover
 
 **Monitoring:**
+- Cloud Monitoring dashboards: request latency, error rate, agent execution time
 - Case decision latency SLA: p95 < 5 seconds for intake + structuring
 - Manual escalation rate: target < 5% of cases
 - Audit log completeness: 100% (enforced at DB layer)
+- Alerting on Aviationstack API quota usage, API errors
 
 ---
 
-## 12. Testing strategy
+## 12. Codebase structure
 
-### 12.1 Unit tests
+```
+claimjet/
+├── docker-compose.yml                # Local dev environment
+├── README.md                          # Project overview
+├── package.json / requirements.txt    # Dependencies
+├── .env.example                       # Environment template
+│
+├── src/
+│   ├── main.ts                        # Application entry point
+│   ├── config/
+│   │   ├── env.ts                     # Environment validation
+│   │   ├── constants.ts               # Shared constants
+│   │   └── cloud-run.ts               # Cloud Run config
+│   │
+│   ├── controllers/
+│   │   ├── claims.controller.ts       # POST /claims, GET /cases/{id}
+│   │   ├── escalation.controller.ts   # POST /cases/{id}/escalate
+│   │   └── health.controller.ts       # Health checks
+│   │
+│   ├── services/
+│   │   ├── claims.service.ts          # Orchestrator: case routing & state machine
+│   │   └── external/
+│   │       ├── aviationstack.service.ts  # Flight verification API client
+│   │       ├── claude.service.ts         # LLM inference client
+│   │       └── cache.service.ts          # Redis operations
+│   │
+│   ├── agents/
+│   │   ├── agent1-intake/
+│   │   │   ├── intake.agent.ts        # LLM extraction logic
+│   │   │   ├── intake.schema.ts       # JSON schema for structured output
+│   │   │   └── intake.test.ts
+│   │   ├── agent2-verification/
+│   │   │   ├── verification.agent.ts  # Flight data + confidence scoring
+│   │   │   ├── aviationstack.adapter.ts
+│   │   │   └── verification.test.ts
+│   │   ├── agent3-eligibility/
+│   │   │   ├── eligibility.agent.ts   # EU261 rule engine
+│   │   │   ├── rules.engine.ts        # Deterministic rules
+│   │   │   └── eligibility.test.ts
+│   │   └── agent4-resolution/
+│   │       ├── resolution.agent.ts    # Narrative generation
+│   │       ├── templates/
+│   │       │   ├── eligible.hbs
+│   │       │   ├── ineligible.hbs
+│   │       │   └── escalated.hbs
+│   │       └── resolution.test.ts
+│   │
+│   ├── models/
+│   │   ├── case.model.ts              # Case entity + schema
+│   │   ├── evidence.model.ts          # Evidence attachments
+│   │   └── audit-log.model.ts         # Audit trail
+│   │
+│   ├── repositories/
+│   │   ├── case.repository.ts         # DB operations: cases, evidence
+│   │   ├── audit.repository.ts        # Audit log operations
+│   │   └── rule.repository.ts         # Rule versioning
+│   │
+│   ├── middleware/
+│   │   ├── auth.middleware.ts         # OAuth/SAML + JWT verify
+│   │   ├── logger.middleware.ts       # Request/response logging
+│   │   ├── error-handler.middleware.ts
+│   │   └── rate-limit.middleware.ts
+│   │
+│   ├── utils/
+│   │   ├── validators.ts              # Input sanitization
+│   │   ├── error-codes.ts             # Standardized error codes
+│   │   └── delay-calculator.ts        # Delay hour calculations
+│   │
+│   └── types/
+│       ├── case.types.ts              # TypeScript interfaces
+│       ├── agents.types.ts
+│       └── api.types.ts
+│
+├── infra/
+│   ├── terraform/
+│   │   ├── main.tf                    # Cloud Run, Cloud SQL, Memorystore
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── modules/
+│   │       ├── cloud-run/
+│   │       ├── cloud-sql/
+│   │       └── redis/
+│   ├── cloudbuild.yaml                # CI/CD pipeline
+│   └── docker/
+│       ├── Dockerfile                 # Multi-stage build
+│       └── .dockerignore
+│
+├── migrations/
+│   ├── 001_init_cases_table.sql
+│   ├── 002_init_evidence_table.sql
+│   ├── 003_init_audit_log_table.sql
+│   └── 004_init_rules_table.sql
+│
+├── tests/
+│   ├── unit/
+│   │   ├── agents/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── integration/
+│   │   ├── claims-flow.test.ts
+│   │   ├── agent-chain.test.ts
+│   │   └── db.fixtures.ts
+│   ├── e2e/
+│   │   ├── api.e2e.test.ts
+│   │   └── cloud-run.test.ts
+│   └── fixtures/
+│       ├── sample-complaints.json
+│       ├── mock-flight-data.json
+│       └── mock-rules.json
+│
+├── docs/
+│   ├── ARCHITECTURE.md                # High-level design (links to design doc)
+│   ├── API.md                         # API endpoint documentation
+│   ├── SETUP.md                       # Local dev environment
+│   ├── DEPLOYMENT.md                  # Cloud Run deployment guide
+│   ├── AGENTS.md                      # Agent implementation guide
+│   └── RULES.md                       # EU261 rules reference
+│
+└── scripts/
+    ├── bootstrap.sh                   # Set up local dev DB
+    ├── seed-rules.sh                  # Load rule fixtures
+    └── test-flight-api.sh             # Debug Aviationstack API
+```
+
+**Key principles:**
+
+1. **Separation of concerns:** Controllers → Services → Agents/Rules → Repositories
+2. **Modular agents:** Each agent is self-contained (logic, tests, schemas)
+3. **No business logic in controllers:** Controllers delegate to services
+4. **Immutable audit trail:** All decisions logged; audit repo is read-only after commit
+5. **Type safety:** TypeScript interfaces enforce contracts between layers
+6. **External service isolation:** Adapters (Aviationstack, Claude) are swappable
+7. **Configuration as code:** All env/secrets via Cloud Run, passed at runtime
+8. **Infrastructure as code:** Terraform modules for reproducible deployment
+9. **Test coverage by layer:** Unit (agents, rules), integration (flows), E2E (API)
+10. **Documentation co-located:** `docs/` folder parallels src structure
+
+**Dependency flow (acyclic):**
+```
+API Requests
+    ↓
+Controllers (request validation)
+    ↓
+Services (business logic + orchestration)
+    ↓
+Agents (LLM/rule evaluation)
+    ↓
+Repositories (data access)
+    ↓
+PostgreSQL / Redis
+```
+
+**Technology recommendations:**
+- **Language:** TypeScript (strong types, Node.js async/await)
+- **Framework:** Express / Fastify (lightweight, Cloud Run optimized)
+- **ORM:** Prisma or SQLAlchemy (type-safe, migration-friendly)
+- **Testing:** Jest (unit), Supertest (integration), Playwright (E2E)
+- **Linting:** ESLint + Prettier (code consistency)
+- **Git:** conventional commits, branch protection on main
+
+---
+
+## 13. Testing strategy
+
+### 13.1 Unit tests
 - LLM extraction accuracy on 50+ real complaint samples
 - Rule engine matrix coverage (all delay/circumstance combinations)
 - State machine transitions (happy path + edge cases)
@@ -371,14 +553,14 @@ POST /v1/cases/{id}/escalate
 - Flight verification with mock data sources
 - Rule engine + LLM consistency (decisions match expected outcomes)
 
-### 12.3 Compliance tests
+### 13.3 Compliance tests
 - GDPR data retention and deletion
 - audit logging completeness
 - decision explainability (staff can trace every rule applied)
 
 ---
 
-## 13. Risks & mitigation
+## 14. Risks & mitigation
 
 | Risk | Impact | Mitigation |
 |---|---|---|
@@ -390,7 +572,7 @@ POST /v1/cases/{id}/escalate
 
 ---
 
-## 14. Success metrics
+## 15. Success metrics
 
 - **Automation rate:** > 85% of cases resolved without manual intervention
 - **Decision consistency:** inter-rater agreement > 95% (staff review audit sample)
@@ -400,7 +582,7 @@ POST /v1/cases/{id}/escalate
 
 ---
 
-## 15. Future roadmap
+## 16. Future roadmap
 
 - **Phase 2:** cancellation and denied-boarding workflows (same architecture)
 - **Phase 3:** multi-language support and regional policy variants
