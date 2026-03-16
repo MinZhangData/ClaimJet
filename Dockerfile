@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY chatbot.py .
 COPY eu261_rules.py .
+COPY flight_verifier.py .
 
 # Expose port (Cloud Run will set PORT env variable)
 ENV PORT=8080
