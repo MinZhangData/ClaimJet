@@ -1,93 +1,33 @@
 """
-Flight Verification Module using AviationStack API
+Flight Verification Module using AeroDataBox API
 Verifies real flight data and determines EU261 eligibility
 """
 
 import requests
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, List
 from eu261_rules import EU261Rules
 import os
 
 
 class FlightVerifier:
     """
-    Verifies flight information using AviationStack API and determines EU261 eligibility
+    Verifies flight information using AeroDataBox API and determines EU261 eligibility
     """
 
-    API_BASE_URL = "https://api.aviationstack.com/v1/flights"
-    DEFAULT_ACCESS_KEY = "e20e7bed45a2ceacb137580a8dae223f"
+    API_BASE_URL = "https://prod.api.market/api/v1/aedbx/aerodatabox/flights"
+    DEFAULT_API_KEY = "cmmtn2ach000djm04lbnkeege"
 
-    def __init__(self, access_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize FlightVerifier with API access key
+        Initialize FlightVerifier with API key
 
         Args:
-            access_key: AviationStack API access key (defaults to env var or hardcoded key)
+            api_key: AeroDataBox API key (defaults to env var or hardcoded key)
         """
-        self.access_key = (
-            access_key
-            or os.environ.get("AVIATIONSTACK_API_KEY")
-            or self.DEFAULT_ACCESS_KEY
+        self.api_key = (
+            api_key or os.environ.get("AERODATABOX_API_KEY") or self.DEFAULT_API_KEY
         )
-
-    def calculate_distance(
-        self, lat1: float, lon1: float, lat2: float, lon2: float
-    ) -> float:
-        """
-        Calculate distance between two coordinates using Haversine formula
-
-        Args:
-            lat1, lon1: Origin coordinates
-            lat2, lon2: Destination coordinates
-
-        Returns:
-            Distance in kilometers
-        """
-        from math import radians, cos, sin, asin, sqrt
-
-        # Convert to radians
-        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-
-        # Haversine formula
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-        c = 2 * asin(sqrt(a))
-
-        # Earth radius in kilometers
-        r = 6371
-
-        return c * r
-
-    def _estimate_distance_from_airports(self, dep_iata: str, arr_iata: str) -> float:
-        """
-        Estimate flight distance based on common routes
-
-        Args:
-            dep_iata: Departure airport IATA code
-            arr_iata: Arrival airport IATA code
-
-        Returns:
-            Estimated distance in kilometers (0 if unknown)
-        """
-        # Common airport pairs and their distances
-        routes = {
-            ("AMS", "GOT"): 770,  # Amsterdam - Gothenburg
-            ("GOT", "AMS"): 770,
-            ("AMS", "BCN"): 1200,  # Amsterdam - Barcelona
-            ("BCN", "AMS"): 1200,
-            ("AMS", "CDG"): 430,  # Amsterdam - Paris
-            ("CDG", "AMS"): 430,
-            ("AMS", "LHR"): 360,  # Amsterdam - London
-            ("LHR", "AMS"): 360,
-            ("AMS", "JFK"): 5900,  # Amsterdam - New York
-            ("JFK", "AMS"): 5900,
-            ("AMS", "DXB"): 5000,  # Amsterdam - Dubai
-            ("DXB", "AMS"): 5000,
-        }
-
-        return routes.get((dep_iata, arr_iata), 0)
 
     def verify_flight(
         self, flight_number: str, flight_date: Optional[str] = None
@@ -96,109 +36,71 @@ class FlightVerifier:
         Verify flight information and determine EU261 eligibility
 
         Args:
-            flight_number: Flight number (e.g., "KL1234")
-            flight_date: Flight date in YYYY-MM-DD format (optional for current/future flights)
+            flight_number: Flight number (e.g., "KL1234", "KL 1234", "0895")
+            flight_date: Flight date in YYYY-MM-DD format (required for this API)
 
         Returns:
             Dictionary containing flight info and EU261 decision
-
-        Note:
-            Free tier API only supports current and future flights.
-            Historical flight queries require a paid plan.
         """
         try:
-            # Call AviationStack API
-            params = {
-                "access_key": self.access_key,
-                "flight_iata": flight_number,
-                "limit": 100,
-            }
+            # Clean up flight number (remove spaces)
+            flight_number_clean = flight_number.replace(" ", "").upper()
 
-            # Try to add date parameter (works on paid plans)
-            if flight_date:
-                params["flight_date"] = flight_date
+            # If no date provided, use today's date
+            if not flight_date:
+                flight_date = datetime.now().strftime("%Y-%m-%d")
 
-            response = requests.get(self.API_BASE_URL, params=params, timeout=10)
+            # Build API URL
+            # Format: /flights/{searchBy}/{searchParam}/{dateLocal}
+            url = f"{self.API_BASE_URL}/Number/{flight_number_clean}/{flight_date}"
+
+            # Set headers with API key
+            headers = {"x-api-market-key": self.api_key}
+
+            # Call AeroDataBox API
+            response = requests.get(url, headers=headers, timeout=10)
 
             # Check for API errors
-            if response.status_code == 403:
-                api_data = response.json()
-                error_msg = api_data.get("error", {}).get(
-                    "message", "API access denied"
-                )
-
-                # If date parameter caused the error, retry without it
-                if flight_date and "subscription" in error_msg.lower():
-                    # Retry without date parameter
-                    params_no_date = {
-                        "access_key": self.access_key,
-                        "flight_iata": flight_number,
-                        "limit": 100,
-                    }
-                    response = requests.get(
-                        self.API_BASE_URL, params=params_no_date, timeout=10
-                    )
-
-                    if response.status_code != 200:
-                        return {
-                            "success": False,
-                            "error": f"Free tier API cannot query specific dates. Requested: {flight_date}. Available: recent flights only. Upgrade to paid plan for historical data.",
-                            "error_type": "api_limitation",
-                        }
-                else:
-                    return {
-                        "success": False,
-                        "error": error_msg,
-                        "error_type": "api_forbidden",
-                    }
-
-            response.raise_for_status()
-            api_data = response.json()
-
-            # Check for API error in response
-            if "error" in api_data:
+            if response.status_code == 401:
                 return {
                     "success": False,
-                    "error": api_data["error"].get("message", "Unknown API error"),
-                    "error_type": "api_error",
+                    "error": "API authentication failed. Please check your API key.",
+                    "error_type": "api_auth_error",
                 }
 
-            # Check if flight data exists
-            if not api_data.get("data") or len(api_data["data"]) == 0:
+            if response.status_code == 403:
                 return {
                     "success": False,
-                    "error": f"No flight data found for {flight_number}"
-                    + (f" on {flight_date}" if flight_date else "")
-                    + ".\n\n💡 This could mean:\n"
+                    "error": "API access denied. Your plan may not support this feature.",
+                    "error_type": "api_forbidden",
+                }
+
+            if response.status_code == 404:
+                return {
+                    "success": False,
+                    "error": f"No flight data found for {flight_number} on {flight_date}.\n\n💡 This could mean:\n"
                     + "• Flight number doesn't exist or is incorrect\n"
-                    + "• Flight is not in the recent flights database (free tier: last 24-48h)\n"
-                    + "• Try checking without a date, or use manual entry mode",
+                    + "• Flight doesn't operate on this date\n"
+                    + "• Try a different date, or use manual entry mode",
                     "error_type": "not_found",
                 }
 
-            # If date was specified, try to find matching flight
-            flights = api_data["data"]
-            if flight_date:
-                matching_flights = [
-                    f for f in flights if f.get("flight_date") == flight_date
-                ]
-                if matching_flights:
-                    flight = matching_flights[0]
-                else:
-                    # No exact match - show available dates
-                    available_dates = list(set([f.get("flight_date") for f in flights]))
-                    return {
-                        "success": False,
-                        "error": f"Flight {flight_number} not found for {flight_date}. Available: {', '.join(sorted(available_dates))}. Note: Free tier shows recent flights only.",
-                        "error_type": "date_not_available",
-                        "available_dates": available_dates,
-                    }
-            else:
-                # Use most recent flight
-                flight = flights[0]
+            response.raise_for_status()
+            flights_data = response.json()
+
+            # Check if flights data is a list and has results
+            if not isinstance(flights_data, list) or len(flights_data) == 0:
+                return {
+                    "success": False,
+                    "error": f"No flight data found for {flight_number} on {flight_date}.\n\n💡 Try using manual entry mode instead.",
+                    "error_type": "not_found",
+                }
+
+            # Use the first flight (most relevant)
+            flight = flights_data[0]
 
             # Extract flight information
-            result = self._extract_flight_info(flight)
+            result = self._extract_flight_info(flight, flight_date)
 
             # Calculate EU261 eligibility
             result.update(self._calculate_eu261_decision(result))
@@ -218,12 +120,13 @@ class FlightVerifier:
                 "error_type": "unknown_error",
             }
 
-    def _extract_flight_info(self, flight: Dict) -> Dict:
+    def _extract_flight_info(self, flight: Dict, flight_date: str) -> Dict:
         """
-        Extract relevant flight information from API response
+        Extract relevant flight information from AeroDataBox API response
 
         Args:
             flight: Flight data from API
+            flight_date: The requested flight date
 
         Returns:
             Structured flight information
@@ -231,73 +134,87 @@ class FlightVerifier:
         # Get departure and arrival info
         departure = flight.get("departure", {})
         arrival = flight.get("arrival", {})
-        flight_info = flight.get("flight", {})
 
-        # Extract airport codes
-        dep_airport = departure.get("iata", "Unknown")
-        arr_airport = arrival.get("iata", "Unknown")
+        # Extract airport information
+        dep_airport = departure.get("airport", {})
+        arr_airport = arrival.get("airport", {})
 
-        # Extract scheduled and actual times
-        scheduled_dep = departure.get("scheduled")
-        actual_dep = departure.get("actual") or departure.get("estimated")
-        scheduled_arr = arrival.get("scheduled")
-        actual_arr = arrival.get("actual") or arrival.get("estimated")
+        dep_iata = dep_airport.get("iata", "Unknown")
+        dep_name = dep_airport.get("name", "Unknown")
+        arr_iata = arr_airport.get("iata", "Unknown")
+        arr_name = arr_airport.get("name", "Unknown")
+
+        # Extract scheduled and actual/predicted times
+        scheduled_dep = departure.get("scheduledTime", {})
+        scheduled_arr = arrival.get("scheduledTime", {})
+        actual_arr = arrival.get("actualTime", {})
+        revised_arr = arrival.get("revisedTime", {})
+        predicted_arr = arrival.get("predictedTime", {})
+
+        # Use actual if available, otherwise revised, otherwise predicted
+        final_arr = (
+            actual_arr
+            if actual_arr
+            else (revised_arr if revised_arr else predicted_arr)
+        )
 
         # Calculate delay
         delay_hours = 0
-        if scheduled_arr and actual_arr:
+        delay_minutes = 0
+        if scheduled_arr and final_arr:
             try:
-                scheduled_time = datetime.fromisoformat(
-                    scheduled_arr.replace("Z", "+00:00")
-                )
-                actual_time = datetime.fromisoformat(actual_arr.replace("Z", "+00:00"))
-                delay_minutes = (actual_time - scheduled_time).total_seconds() / 60
-                delay_hours = delay_minutes / 60
-            except:
+                # Get UTC times
+                scheduled_utc = scheduled_arr.get("utc")
+                final_utc = final_arr.get("utc")
+
+                if scheduled_utc and final_utc:
+                    # Parse times (format: "2026-03-31 01:25Z")
+                    scheduled_time = datetime.strptime(scheduled_utc, "%Y-%m-%d %H:%MZ")
+                    final_time = datetime.strptime(final_utc, "%Y-%m-%d %H:%MZ")
+
+                    delay_seconds = (final_time - scheduled_time).total_seconds()
+                    delay_minutes = delay_seconds / 60
+                    delay_hours = delay_minutes / 60
+            except Exception as e:
+                print(f"Error calculating delay: {e}")
                 delay_hours = 0
+                delay_minutes = 0
 
-        # Calculate distance
+        # Get distance (provided by API in greatCircleDistance)
         distance_km = 0
-        try:
-            dep_lat = departure.get("latitude")
-            dep_lon = departure.get("longitude")
-            arr_lat = arrival.get("latitude")
-            arr_lon = arrival.get("longitude")
-
-            if all([dep_lat, dep_lon, arr_lat, arr_lon]):
-                distance_km = self.calculate_distance(
-                    float(dep_lat), float(dep_lon), float(arr_lat), float(arr_lon)
-                )
-            else:
-                # If coordinates not available, try to estimate based on common routes
-                distance_km = self._estimate_distance_from_airports(
-                    dep_airport, arr_airport
-                )
-        except:
-            # If calculation fails, try to estimate based on common routes
-            distance_km = self._estimate_distance_from_airports(
-                dep_airport, arr_airport
-            )
+        great_circle = flight.get("greatCircleDistance", {})
+        if great_circle:
+            distance_km = great_circle.get("km", 0)
 
         # Extract flight status
-        flight_status = flight.get("flight_status", "unknown")
+        flight_status = flight.get("status", "Unknown")
+
+        # Extract airline and flight number
+        airline_info = flight.get("airline", {})
+        airline_name = airline_info.get("name", "Unknown")
+        flight_number = flight.get("number", "Unknown")
+
+        # Format times for display
+        scheduled_arr_display = (
+            scheduled_arr.get("local", "N/A") if scheduled_arr else "N/A"
+        )
+        final_arr_display = final_arr.get("local", "N/A") if final_arr else "N/A"
 
         return {
             "success": True,
-            "flight_number": flight_info.get("iata", "Unknown"),
-            "airline": flight_info.get("airline", {}).get("name", "Unknown"),
-            "departure_airport": dep_airport,
-            "departure_city": departure.get("airport", "Unknown"),
-            "arrival_airport": arr_airport,
-            "arrival_city": arrival.get("airport", "Unknown"),
-            "scheduled_departure": scheduled_dep,
-            "actual_departure": actual_dep,
-            "scheduled_arrival": scheduled_arr,
-            "actual_arrival": actual_arr,
+            "flight_number": flight_number,
+            "airline": airline_name,
+            "departure_airport": dep_iata,
+            "departure_city": dep_name,
+            "arrival_airport": arr_iata,
+            "arrival_city": arr_name,
+            "scheduled_arrival": scheduled_arr_display,
+            "actual_arrival": final_arr_display,
             "flight_status": flight_status,
             "delay_hours": round(delay_hours, 2),
+            "delay_minutes": round(delay_minutes, 0),
             "distance_km": round(distance_km, 0),
-            "flight_date": flight.get("flight_date", "Unknown"),
+            "flight_date": flight_date,
         }
 
     def _calculate_eu261_decision(self, flight_info: Dict) -> Dict:
@@ -318,9 +235,9 @@ class FlightVerifier:
         flight_status = flight_info.get("flight_status", "").lower()
 
         # Check if flight was cancelled
-        cancellation = flight_status == "cancelled"
+        cancellation = "cancel" in flight_status
 
-        # Check if flight was delayed enough for compensation
+        # Calculate based on actual scenario
         if cancellation:
             # Cancelled flights are eligible (unless given adequate notice)
             claim_result = EU261Rules.calculate_claim_amount(
@@ -363,34 +280,36 @@ class FlightVerifier:
         """
         if not result.get("success"):
             error_msg = f"❌ Error: {result.get('error', 'Unknown error')}"
-
-            # Add helpful suggestion for date limitations
-            if result.get("error_type") in ["api_limitation", "date_not_available"]:
-                available = result.get("available_dates", [])
-                error_msg += "\n\n💡 **Alternative Options:**\n"
-                if available:
-                    error_msg += (
-                        f"1. Check available dates: {', '.join(sorted(available))}\n"
-                    )
-                error_msg += "2. Use manual entry: Tell me your flight delay details (route, delay hours)\n"
-                error_msg += "3. Upgrade API plan for historical data access\n"
-
             return error_msg
+
+        # Determine if there's a delay worth mentioning
+        delay_hours = result.get("delay_hours", 0)
+        delay_minutes = result.get("delay_minutes", 0)
+
+        # Format delay display
+        if delay_hours >= 1:
+            delay_display = f"{delay_hours} hours"
+        elif delay_minutes > 0:
+            delay_display = f"{int(delay_minutes)} minutes"
+        elif delay_hours < 0:
+            delay_display = f"{abs(delay_hours)} hours early"
+        else:
+            delay_display = "On time"
 
         message = f"""
 ✈️ **Flight Verification Result**
 
 **Flight Details:**
 - Flight: {result["flight_number"]} ({result["airline"]})
-- Route: {result["departure_airport"]} → {result["arrival_airport"]}
+- Route: {result["departure_city"]} ({result["departure_airport"]}) → {result["arrival_city"]} ({result["arrival_airport"]})
 - Date: {result["flight_date"]}
 - Distance: {result["distance_km"]} km
-- Status: {result["flight_status"].upper()}
+- Status: {result["flight_status"]}
 
-**Delay Information:**
+**Timing:**
 - Scheduled Arrival: {result.get("scheduled_arrival", "N/A")}
-- Actual Arrival: {result.get("actual_arrival", "N/A")}
-- Delay: {result["delay_hours"]} hours
+- Actual/Predicted Arrival: {result.get("actual_arrival", "N/A")}
+- Delay: {delay_display}
 
 ---
 
@@ -427,18 +346,17 @@ def test_flight_verification():
     """Test flight verification with a sample flight"""
     verifier = FlightVerifier()
 
-    # Test with a recent flight (adjust date as needed)
-    print("Testing flight verification...")
+    # Test with KL0895 on a specific date
+    print("Testing flight verification with AeroDataBox API...")
     print("=" * 60)
 
-    # Example: KL1234 flight (without date - free tier limitation)
-    print("\nTest 1: KL1234 (current/upcoming flights)")
-    result = verifier.verify_flight("KL1234")
+    print("\nTest 1: KL0895 on 2026-03-01")
+    result = verifier.verify_flight("KL0895", "2026-03-01")
     print(verifier.format_decision(result))
 
     print("\n" + "=" * 60)
-    print("\nTest 2: BA123 (example)")
-    result2 = verifier.verify_flight("BA123")
+    print("\nTest 2: KL0895 (today's date)")
+    result2 = verifier.verify_flight("KL0895")
     print(verifier.format_decision(result2))
 
 

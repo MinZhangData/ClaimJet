@@ -25,11 +25,23 @@ class SimpleClaimChatbot:
         return float(numbers[0]) if numbers else None
 
     def extract_flight_number(self, text):
-        """Extract flight number from text (e.g., KL1234, BA456)"""
-        # Match patterns like KL1234, BA456, etc.
-        match = re.search(r"\b([A-Z]{2})\s*(\d{3,4})\b", text.upper())
+        """Extract flight number from text (e.g., KL1234, BA456, or just 0895)"""
+        text_upper = text.upper()
+
+        # Pattern 1: Full format with airline code (e.g., KL1234, BA456)
+        match = re.search(r"\b([A-Z]{2})\s*(\d{3,4})\b", text_upper)
         if match:
             return match.group(1) + match.group(2)
+
+        # Pattern 2: Just numbers (e.g., 0895, 1234) - assume KL airline
+        match = re.search(r"\b(\d{3,4})\b", text)
+        if match:
+            flight_num = match.group(1)
+            # For 3-4 digit numbers, assume it's a KL flight number
+            # (KLM is the primary airline for this chatbot)
+            if len(flight_num) >= 3:
+                return f"KL{flight_num}"
+
         return None
 
     def extract_date(self, text):
@@ -65,8 +77,10 @@ class SimpleClaimChatbot:
             flight_date = self.extract_date(message)
 
             # Check if this is likely a flight verification request
-            # Keywords: check, verify, lookup, flight, delayed, cancelled, denied
-            # OR if date is present (strong indicator of flight verification)
+            # Conditions:
+            # 1. Has keywords: check, verify, lookup, flight, delayed, cancelled, denied, was
+            # 2. Has a date (strong indicator)
+            # 3. Message is very short (likely just a flight number, e.g., "0895")
             is_verification_request = (
                 any(
                     word in message_lower
@@ -82,6 +96,7 @@ class SimpleClaimChatbot:
                     ]
                 )
                 or flight_date is not None
+                or len(message.strip()) <= 8  # Short input like "0895" or "KL1234"
             )
 
             if is_verification_request:
