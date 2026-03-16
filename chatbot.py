@@ -1,24 +1,67 @@
 """
 Simple Rule-Based Chatbot for KLM Flight Delay Compensation
 Works without requiring Vertex AI models
+Supports real-time flight verification via AviationStack API
 """
 
 import gradio as gr
 from eu261_rules import EU261Rules
+from flight_verifier import FlightVerifier
+from typing import Optional
 import re
 import os
 
 
 class SimpleClaimChatbot:
-    """Simple rule-based chatbot using EU261 rules"""
+    """Simple rule-based chatbot using EU261 rules with flight verification"""
 
     def __init__(self):
         self.conversation_state = {}
+        self.flight_verifier = FlightVerifier()
 
     def extract_number(self, text):
         """Extract numbers from text"""
         numbers = re.findall(r"\d+(?:\.\d+)?", text)
         return float(numbers[0]) if numbers else None
+
+    def extract_flight_number(self, text):
+        """Extract flight number from text (e.g., KL1234, BA456, or just 0895)"""
+        text_upper = text.upper()
+
+        # Pattern 1: Full format with airline code (e.g., KL1234, BA456)
+        match = re.search(r"\b([A-Z]{2})\s*(\d{3,4})\b", text_upper)
+        if match:
+            return match.group(1) + match.group(2)
+
+        # Pattern 2: Just numbers (e.g., 0895, 1234) - assume KL airline
+        match = re.search(r"\b(\d{3,4})\b", text)
+        if match:
+            flight_num = match.group(1)
+            # For 3-4 digit numbers, assume it's a KL flight number
+            # (KLM is the primary airline for this chatbot)
+            if len(flight_num) >= 3:
+                return f"KL{flight_num}"
+
+        return None
+
+    def extract_date(self, text):
+        """Extract date from text (YYYY-MM-DD format or variations)"""
+        # Match YYYY-MM-DD format
+        match = re.search(r"\b(\d{4})-(\d{2})-(\d{2})\b", text)
+        if match:
+            return match.group(0)
+
+        # Match YYYY/MM/DD format
+        match = re.search(r"\b(\d{4})/(\d{2})/(\d{2})\b", text)
+        if match:
+            return match.group(0).replace("/", "-")
+
+        # Match "on YYYY-MM-DD" or "date YYYY-MM-DD"
+        match = re.search(r"(?:on|date)\s+(\d{4})-(\d{2})-(\d{2})", text.lower())
+        if match:
+            return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+
+        return None
 
     def process_message(self, message, state):
         """Process user message and return response"""
@@ -26,6 +69,39 @@ class SimpleClaimChatbot:
 
         # Mark as greeted
         state["greeted"] = True
+
+        # PRIORITY 1: Check for flight number first (before extracting delays)
+        # This prevents misinterpreting flight numbers as delay hours
+        flight_number = self.extract_flight_number(message)
+        if flight_number:
+            flight_date = self.extract_date(message)
+
+            # Check if this is likely a flight verification request
+            # Conditions:
+            # 1. Has keywords: check, verify, lookup, flight, delayed, cancelled, denied, was
+            # 2. Has a date (strong indicator)
+            # 3. Message is very short (likely just a flight number, e.g., "0895")
+            is_verification_request = (
+                any(
+                    word in message_lower
+                    for word in [
+                        "check",
+                        "verify",
+                        "lookup",
+                        "flight",
+                        "delayed",
+                        "cancelled",
+                        "denied",
+                        "was",
+                    ]
+                )
+                or flight_date is not None
+                or len(message.strip()) <= 8  # Short input like "0895" or "KL1234"
+            )
+
+            if is_verification_request:
+                # Call API to verify the flight
+                return self.verify_flight_info(flight_number, flight_date)
 
         # Extract delay information
         if "delay" in message_lower or "late" in message_lower:
@@ -187,17 +263,30 @@ class SimpleClaimChatbot:
 
 I'm here to help you check if you're eligible for compensation under EU Regulation 261/2004.
 
-**Please tell me about your situation:**
+**Two ways to check your eligibility:**
+
+**Option 1: Verify a specific flight** (Real-time data!)
+- Just tell me: "Check flight KL1234" or "Verify flight BA456"
+- I'll look up the actual flight data and determine eligibility
+- Note: Works for current and upcoming flights
+
+**Option 2: Describe your situation manually**
 - Was your flight delayed, cancelled, or were you denied boarding?
 - How long was the delay (in hours)?
 - What was your route or distance?
 
 **Examples:**
+- "Check flight KL1234"
+- "Verify flight BA456 on 2026-03-16"
 - "My flight from Amsterdam to Barcelona was delayed 5 hours"
 - "Flight was cancelled with 3 days notice, about 1200 km"
-- "I was denied boarding on a 400 km flight"
 
 Go ahead, tell me what happened! 😊"""
+
+    def verify_flight_info(self, flight_number: str, flight_date: Optional[str] = None):
+        """Verify flight using AviationStack API"""
+        result = self.flight_verifier.verify_flight(flight_number, flight_date)
+        return self.flight_verifier.format_decision(result)
 
     def get_help_message(self, state):
         if not state.get("scenario"):
@@ -249,10 +338,11 @@ demo = gr.ChatInterface(
     Just tell me about your flight issue and I'll help you determine if you qualify for compensation.
     """,
     examples=[
+        "Check flight KL1234",
+        "Verify flight BA456",
         "My flight from Amsterdam to Barcelona was delayed 5 hours",
         "Flight was cancelled with 3 days notice, distance was 5900 km",
         "I was denied boarding due to overbooking on a 1200 km flight",
-        "My flight was delayed 6 hours due to bad weather, about 400 km",
     ],
 )
 
@@ -266,5 +356,3 @@ if __name__ == "__main__":
     print("\n⚠️  Press Ctrl+C to stop the server\n")
 
     demo.launch(server_name="127.0.0.1", server_port=7860, share=False, show_error=True)
-
-    
