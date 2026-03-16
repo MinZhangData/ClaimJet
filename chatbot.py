@@ -266,3 +266,5 @@ if __name__ == "__main__":
     print("\n⚠️  Press Ctrl+C to stop the server\n")
 
     demo.launch(server_name="127.0.0.1", server_port=7860, share=False, show_error=True)
+
+    
