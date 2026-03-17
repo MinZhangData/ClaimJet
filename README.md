@@ -1,13 +1,12 @@
-# ✈️ ClaimJet / DelaySlayer - EU261 Flight Compensation Assistant
+# ✈️ DelaySlayer - EU261 Flight Compensation Assistant
 
 An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers check flight compensation eligibility under EU261 regulations.
 
-## 🚀 Live Production Apps
+## 🚀 Live Production App
 
-| App Name | URL | Status | Description |
-|----------|-----|--------|-------------|
-| **⭐ DelaySlayer** | https://delayslayer-o2lrnifutq-uc.a.run.app | ✅ Production | Latest deployment (v1.0) |
-| **ClaimJet Final** | https://claimjet-final-o2lrnifutq-uc.a.run.app | ✅ Production | Refactored package (v3.0) |
+**⭐ DelaySlayer:** https://delayslayer-o2lrnifutq-uc.a.run.app
+
+*Previously known as ClaimJet - now rebranded to DelaySlayer*
 
 ---
 
@@ -69,7 +68,7 @@ An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers
 ## 🧩 Core Components
 
 ### 1. **Google ADK (Agent Development Kit)**
-The foundation of ClaimJet's intelligence.
+The foundation of DelaySlayer's intelligence.
 
 **Location:** `app/core/agent.py`
 
@@ -265,32 +264,18 @@ Output: Detailed information about EU261 rules
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Cloud Run (Serverless)                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  🎯 delayslayer (⭐ LATEST PRODUCTION)                          │
-│  • Latest deployment (v1.0)                                     │
+│  🎯 delayslayer (⭐ PRODUCTION)                                 │
+│  • DelaySlayer v1.0 - Latest Production Release                │
 │  • ADK + Memory Bank + Model Armor                              │
 │  • URL: https://delayslayer-o2lrnifutq-uc.a.run.app            │
 │  • Image: gcr.io/qwiklabs-asl-03-7e6910d4e317/delayslayer:v1    │
 │  • Memory: 1Gi, CPU: 1, Timeout: 300s                           │
 │  • Secrets: GEMINI_API_KEY from Secret Manager                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  claimjet-final (Previous Production v3.0)                      │
-│  • Refactored package structure                                 │
-│  • ADK + Memory Bank + Model Armor                              │
-│  • URL: https://claimjet-final-o2lrnifutq-uc.a.run.app         │
-│  • Image: gcr.io/qwiklabs-asl-03-7e6910d4e317/claimjet-final:v3│
-│  • Memory: 1Gi, CPU: 1, Timeout: 300s                           │
-│  • Secrets: GEMINI_API_KEY from Secret Manager                  │
-├─────────────────────────────────────────────────────────────────┤
-│  claimjet-memory-bank (Previous Production v2.0)                │
-│  • ADK + Memory Bank + Model Armor                              │
-│  • URL: https://claimjet-memory-bank-...-run.app                │
-│  • Image: gcr.io/.../claimjet-memory-bank:v2                    │
-│  • Memory: 2Gi, CPU: 2, Timeout: 300s                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Development Services (for testing)                             │
-│  • claimjet-adk-v2                                              │
-│  • claimjet-adk-chatbot                                         │
-│  • claimjet-chatbot                                             │
+│  Legacy Deployments (formerly ClaimJet)                         │
+│  • claimjet-final (v3.0)                                        │
+│  • claimjet-memory-bank (v2.0)                                  │
+│  • Development/testing services                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -315,7 +300,7 @@ Output: Detailed information about EU261 rules
 ## 📁 Project Structure
 
 ```
-ClaimJet/
+DelaySlayer/
 ├── app/                        # Application Package
 │   ├── __init__.py
 │   ├── core/                   # Core Business Logic
@@ -375,7 +360,7 @@ ClaimJet/
 ### 1. Clone Repository
 ```bash
 git clone <repository-url>
-cd ClaimJet
+cd DelaySlayer
 ```
 
 ### 2. Set Up Environment
@@ -450,7 +435,7 @@ gcloud run deploy delayslayer \
   --set-env-vars GCP_PROJECT=$PROJECT_ID \
   --project=$PROJECT_ID
 
-# Or deploy as claimjet-final
+# Or deploy as claimjet-final (legacy name)
 gcloud builds submit --tag gcr.io/$PROJECT_ID/claimjet-final:v3
 
 gcloud run deploy claimjet-final \
@@ -472,7 +457,7 @@ gcloud run deploy claimjet-final \
 
 ## 🧪 Test Flights
 
-ClaimJet includes mock flight data for testing:
+DelaySlayer includes mock flight data for testing:
 
 | Flight | Route | Delay | Distance | Compensation |
 |--------|-------|-------|----------|--------------|
@@ -641,7 +626,7 @@ gcloud run services update claimjet-final \
 # Check Cloud Run logs (for DelaySlayer)
 gcloud run services logs read delayslayer --limit 50
 
-# Check Cloud Run logs (for ClaimJet Final)
+# Check Cloud Run logs (for legacy ClaimJet services)
 gcloud run services logs read claimjet-final --limit 50
 
 # Describe service
@@ -752,9 +737,8 @@ python run.py
 - **Service Account:** ai-agent-sa@qwiklabs-asl-03-7e6910d4e317.iam.gserviceaccount.com
 
 **Live Services:**
-- **🎯 DelaySlayer (Latest Production):** https://delayslayer-o2lrnifutq-uc.a.run.app
-- **ClaimJet Final (v3.0):** https://claimjet-final-o2lrnifutq-uc.a.run.app
-- **Previous Production (v2.0):** https://claimjet-memory-bank-118562953748.us-central1.run.app
+- **🎯 DelaySlayer (Production):** https://delayslayer-o2lrnifutq-uc.a.run.app
+- **Legacy Services:** ClaimJet deployments available for reference
 
 **Service Configuration:**
 - **Latest Image:** gcr.io/qwiklabs-asl-03-7e6910d4e317/delayslayer:v1
@@ -785,5 +769,9 @@ Built with:
 
 **Status:** ✅ Production Ready  
 **Last Updated:** March 17, 2026  
-**Latest Version:** DelaySlayer v1.0 | ClaimJet v3.0  
+**Version:** DelaySlayer v1.0  
 **Production URL:** https://delayslayer-o2lrnifutq-uc.a.run.app
+
+---
+
+**Note:** This project was formerly known as ClaimJet. All references have been updated to DelaySlayer, though the codebase folder structure remains unchanged for compatibility.
