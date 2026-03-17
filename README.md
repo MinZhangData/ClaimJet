@@ -1,8 +1,12 @@
-# ✈️ ClaimJet - EU261 Flight Compensation Assistant
+# ✈️ DelaySlayer - EU261 Flight Compensation Assistant
 
 An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers check flight compensation eligibility under EU261 regulations.
 
-**⭐ Production App:** https://claimjet-final-118562953748.us-central1.run.app
+## 🚀 Live Production App
+
+**⭐ DelaySlayer:** https://delayslayer-o2lrnifutq-uc.a.run.app
+
+*Previously known as ClaimJet - now rebranded to DelaySlayer*
 
 ---
 
@@ -27,7 +31,7 @@ An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers
 └──────────────────────────────┬──────────────────────────────────┘
                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
-│                    ADK Agent (adk_agent.py)                      │
+│                    ADK Agent (app/core/agent.py)                 │
 │              Google Agent Development Kit (ADK)                  │
 │  • System Instructions        • Function Calling                │
 │  • Tool Selection             • Context Enhancement             │
@@ -64,9 +68,9 @@ An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers
 ## 🧩 Core Components
 
 ### 1. **Google ADK (Agent Development Kit)**
-The foundation of ClaimJet's intelligence.
+The foundation of DelaySlayer's intelligence.
 
-**Location:** `adk_agent.py`
+**Location:** `app/core/agent.py`
 
 **What it does:**
 - Orchestrates agent behavior with system instructions
@@ -95,7 +99,7 @@ class FlightCompensationAgent:
 ### 2. **Memory Bank (Conversation Persistence)**
 Enables context-aware conversations across messages.
 
-**Location:** `memory_bank.py`
+**Location:** `app/core/memory_bank.py`
 
 **What it does:**
 - Stores conversation history in **Google Cloud Firestore**
@@ -204,7 +208,7 @@ Output: Formatted decision with:
         - Next steps for filing claims
 ```
 
-**Location:** `flight_verifier.py`
+**Location:** `app/services/flight_verifier.py`
 
 **Features:**
 - Real flight API integration (when configured)
@@ -222,7 +226,7 @@ Input:  delay_hours=5, distance_km=2000, cancellation=False
 Output: Eligibility decision + compensation amount
 ```
 
-**Location:** `eu261_rules.py`
+**Location:** `app/services/eu261_rules.py`
 
 **EU261 Rules Implemented:**
 - Short flights (<1500km): €250 for 3+ hour delays
@@ -260,30 +264,18 @@ Output: Detailed information about EU261 rules
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Cloud Run (Serverless)                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  claimjet-final (⭐ PRODUCTION - Latest)                        │
-│  • Refactored package structure (v3.0)                          │
+│  🎯 delayslayer (⭐ PRODUCTION)                                 │
+│  • DelaySlayer v1.0 - Latest Production Release                │
 │  • ADK + Memory Bank + Model Armor                              │
-│  • URL: https://claimjet-final-118562953748.us-central1.run.app│
-│  • Image: gcr.io/.../claimjet-final:v3                          │
+│  • URL: https://delayslayer-o2lrnifutq-uc.a.run.app            │
+│  • Image: gcr.io/qwiklabs-asl-03-7e6910d4e317/delayslayer:v1    │
 │  • Memory: 1Gi, CPU: 1, Timeout: 300s                           │
+│  • Secrets: GEMINI_API_KEY from Secret Manager                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  claimjet-memory-bank (Previous Production)                     │
-│  • ADK + Memory Bank + Model Armor                              │
-│  • URL: https://claimjet-memory-bank-...-run.app                │
-│  • Image: gcr.io/.../claimjet-memory-bank:v2                    │
-│  • Memory: 2Gi, CPU: 2, Timeout: 300s                           │
-├─────────────────────────────────────────────────────────────────┤
-│  claimjet-adk-v2                                                │
-│  • ADK (cleaned version)                                        │
-│  • URL: https://claimjet-adk-v2-...-run.app                     │
-├─────────────────────────────────────────────────────────────────┤
-│  claimjet-adk-chatbot                                           │
-│  • ADK (previous version)                                       │
-│  • URL: https://claimjet-adk-chatbot-...-run.app                │
-├─────────────────────────────────────────────────────────────────┤
-│  claimjet-chatbot                                               │
-│  • Original version                                             │
-│  • URL: https://claimjet-chatbot-...-run.app                    │
+│  Legacy Deployments (formerly ClaimJet)                         │
+│  • claimjet-final (v3.0)                                        │
+│  • claimjet-memory-bank (v2.0)                                  │
+│  • Development/testing services                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -308,7 +300,7 @@ Output: Detailed information about EU261 rules
 ## 📁 Project Structure
 
 ```
-ClaimJet/
+DelaySlayer/
 ├── app/                        # Application Package
 │   ├── __init__.py
 │   ├── core/                   # Core Business Logic
@@ -368,7 +360,7 @@ ClaimJet/
 ### 1. Clone Repository
 ```bash
 git clone <repository-url>
-cd ClaimJet
+cd DelaySlayer
 ```
 
 ### 2. Set Up Environment
@@ -408,14 +400,42 @@ export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account-key.json"
 export GCP_PROJECT="your-project-id"
 
 # Start the chatbot
-python chatbot_adk.py
+python run.py
 ```
 
 Open browser: http://localhost:7860
 
-### 5. Deploy to Cloud Run
+### 5. Create Secret in Secret Manager
 ```bash
-# Build and deploy
+# Store your Gemini API key securely
+echo -n "your-gemini-api-key" | gcloud secrets create gemini-api-key \
+  --data-file=- \
+  --project=$PROJECT_ID
+
+# Or update existing secret
+echo -n "your-gemini-api-key" | gcloud secrets versions add gemini-api-key \
+  --data-file=- \
+  --project=$PROJECT_ID
+```
+
+### 6. Deploy to Cloud Run
+```bash
+# Build and deploy DelaySlayer (latest)
+gcloud builds submit --tag gcr.io/$PROJECT_ID/delayslayer:v1
+
+gcloud run deploy delayslayer \
+  --image gcr.io/$PROJECT_ID/delayslayer:v1 \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --cpu 1 \
+  --timeout 300 \
+  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --set-env-vars GCP_PROJECT=$PROJECT_ID \
+  --project=$PROJECT_ID
+
+# Or deploy as claimjet-final (legacy name)
 gcloud builds submit --tag gcr.io/$PROJECT_ID/claimjet-final:v3
 
 gcloud run deploy claimjet-final \
@@ -427,14 +447,17 @@ gcloud run deploy claimjet-final \
   --cpu 1 \
   --timeout 300 \
   --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --set-env-vars GCP_PROJECT=$PROJECT_ID \
   --project=$PROJECT_ID
 ```
+
+**Important:** Use `--set-secrets` to properly mount secrets, not `--set-env-vars` for API keys!
 
 ---
 
 ## 🧪 Test Flights
 
-ClaimJet includes mock flight data for testing:
+DelaySlayer includes mock flight data for testing:
 
 | Flight | Route | Delay | Distance | Compensation |
 |--------|-------|-------|----------|--------------|
@@ -580,20 +603,34 @@ python tests/test_memory_bank.py
 
 ### Gemini API Errors
 ```bash
-# Check API key is set
+# Check API key is set locally
 echo $GEMINI_API_KEY
 
 # Verify Secret Manager access
 gcloud secrets versions access latest --secret=gemini-api-key
+
+# Verify Cloud Run secret configuration
+gcloud run services describe claimjet-final \
+  --region us-central1 \
+  --format="yaml(spec.template.spec.containers[0].env)"
+
+# If secret is not properly mounted, update the service:
+gcloud run services update claimjet-final \
+  --region us-central1 \
+  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --set-env-vars GCP_PROJECT=qwiklabs-asl-03-7e6910d4e317
 ```
 
 ### Deployment Issues
 ```bash
-# Check Cloud Run logs
+# Check Cloud Run logs (for DelaySlayer)
+gcloud run services logs read delayslayer --limit 50
+
+# Check Cloud Run logs (for legacy ClaimJet services)
 gcloud run services logs read claimjet-final --limit 50
 
 # Describe service
-gcloud run services describe claimjet-final --region us-central1
+gcloud run services describe delayslayer --region us-central1
 ```
 
 ---
@@ -619,21 +656,23 @@ python tests/test_memory_bank.py
 
 ### Build & Deploy
 ```bash
-# 1. Build Docker image
-docker build -t gcr.io/$PROJECT_ID/claimjet-final:latest .
+# 1. Build Docker image (DelaySlayer - latest)
+docker build -t gcr.io/$PROJECT_ID/delayslayer:latest .
 
 # 2. Test locally
 docker run -p 8080:8080 \
   -e GEMINI_API_KEY="$GEMINI_API_KEY" \
-  gcr.io/$PROJECT_ID/claimjet-final:latest
+  gcr.io/$PROJECT_ID/delayslayer:latest
 
 # 3. Push to GCR
-docker push gcr.io/$PROJECT_ID/claimjet-final:latest
+docker push gcr.io/$PROJECT_ID/delayslayer:latest
 
 # 4. Deploy to Cloud Run
-gcloud run deploy claimjet-final \
-  --image gcr.io/$PROJECT_ID/claimjet-final:latest \
-  --region us-central1
+gcloud run deploy delayslayer \
+  --image gcr.io/$PROJECT_ID/delayslayer:latest \
+  --region us-central1 \
+  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --set-env-vars GCP_PROJECT=$PROJECT_ID
 ```
 
 ---
@@ -672,9 +711,12 @@ python run.py
 - [x] ADK integration with function calling
 - [x] Memory Bank with Firestore persistence
 - [x] Model Armor content safety
-- [x] Cloud Run deployment
-- [x] Test flight data
+- [x] Cloud Run deployment with Secret Manager
+- [x] Refactored package structure (v3.0)
+- [x] Test flight data (TEST001, TEST002)
 - [x] EU261 compensation calculator
+- [x] Professional Python package layout
+- [x] DelaySlayer production deployment (v1.0)
 
 ### Planned 🚧
 - [ ] User authentication (Google Sign-In)
@@ -695,8 +737,17 @@ python run.py
 - **Service Account:** ai-agent-sa@qwiklabs-asl-03-7e6910d4e317.iam.gserviceaccount.com
 
 **Live Services:**
-- **⭐ Production (Latest):** https://claimjet-final-118562953748.us-central1.run.app
-- **Previous Production:** https://claimjet-memory-bank-118562953748.us-central1.run.app
+- **🎯 DelaySlayer (Production):** https://delayslayer-o2lrnifutq-uc.a.run.app
+- **Legacy Services:** ClaimJet deployments available for reference
+
+**Service Configuration:**
+- **Latest Image:** gcr.io/qwiklabs-asl-03-7e6910d4e317/delayslayer:v1
+- **Resources:** 1Gi RAM, 1 CPU
+- **Timeout:** 300 seconds
+- **Autoscaling:** 0-3 instances
+- **Port:** 8080
+- **Authentication:** Public (allow-unauthenticated)
+- **Secrets:** GEMINI_API_KEY mounted from Secret Manager
 
 **For Issues:**
 1. Check logs: `gcloud logging read "resource.type=cloud_run_revision"`
@@ -718,4 +769,9 @@ Built with:
 
 **Status:** ✅ Production Ready  
 **Last Updated:** March 17, 2026  
-**Version:** 3.0.0 (Refactored Package Structure)
+**Version:** DelaySlayer v1.0  
+**Production URL:** https://delayslayer-o2lrnifutq-uc.a.run.app
+
+---
+
+**Note:** This project was formerly known as ClaimJet. All references have been updated to DelaySlayer, though the codebase folder structure remains unchanged for compatibility.
