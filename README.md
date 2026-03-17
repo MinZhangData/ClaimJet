@@ -2,6 +2,15 @@
 
 An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers check flight compensation eligibility under EU261 regulations.
 
+## 📋 Project Description
+
+**For complete project details, architecture, and design specifications, please refer to:**
+
+📄 **[EU DelaySlayer.pdf](./EU%20DelaySlayer.pdf)** - Complete project documentation including:
+- Project overview and objectives
+- Product design
+- Use cases and examples
+
 ## 🚀 Live Production App
 
 **⭐ DelaySlayer:** https://delayslayer-o2lrnifutq-uc.a.run.app
