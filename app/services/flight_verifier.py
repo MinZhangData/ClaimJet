@@ -3,11 +3,11 @@ Flight Verification Module using AeroDataBox API
 Verifies real flight data and determines EU261 eligibility
 """
 
+import os
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, Optional, List
-from eu261_rules import EU261Rules
-import os
+from app.services.eu261_rules import EU261Rules
 
 
 class FlightVerifier:

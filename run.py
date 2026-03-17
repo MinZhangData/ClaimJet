@@ -1,20 +1,27 @@
+#!/usr/bin/env python3
 """
-ClaimJet Chatbot UI - ADK Version with Memory Bank
+ClaimJet Chatbot UI - Main Entry Point
 Uses Google ADK agent for intelligent flight compensation assistance
 Includes persistent conversation memory using Firestore
 """
 
 import os
+import sys
 import gradio as gr
-from adk_agent import FlightCompensationAgent
-from memory_bank import get_memory_bank
+from dotenv import load_dotenv
+
+# Add project root to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from app.core.agent import FlightCompensationAgent
+from app.core.memory_bank import get_memory_bank
+
+# Load environment variables
+load_dotenv()
 
 # Initialize the ADK agent and Memory Bank
 agent = FlightCompensationAgent()
 memory_bank = get_memory_bank()
-
-# Store session IDs per Gradio session
-session_store = {}
 
 
 def chat_with_agent(message: str, history: list, session_id: str = None) -> str:
@@ -42,11 +49,9 @@ def chat_with_agent(message: str, history: list, session_id: str = None) -> str:
         return f"❌ Error: {str(e)}\n\nPlease try again or check your API key configuration."
 
 
-# Create the Gradio interface
 def create_ui():
     """Create the Gradio chat interface"""
 
-    # Custom CSS for better styling
     custom_css = """
     .gradio-container {
         font-family: 'Arial', sans-serif;
@@ -164,13 +169,14 @@ def create_ui():
     return demo
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point"""
     # Check if API key is set
     if not os.environ.get("GEMINI_API_KEY"):
         print("❌ Error: GEMINI_API_KEY environment variable is not set!")
         print("Please set it with: export GEMINI_API_KEY='your-key-here'")
         print("Get your key from: https://aistudio.google.com/apikey")
-        exit(1)
+        sys.exit(1)
 
     print("✅ Starting ClaimJet ADK Chatbot...")
     print(f"✅ Using Gemini 2.5 Flash model")
@@ -185,13 +191,8 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=port,
         share=False,
-        css="""
-        .gradio-container {
-            font-family: 'Arial', sans-serif;
-        }
-        .message {
-            padding: 10px;
-            border-radius: 8px;
-        }
-        """,
     )
+
+
+if __name__ == "__main__":
+    main()
