@@ -7,6 +7,7 @@ Supports real-time flight verification via AviationStack API
 import gradio as gr
 from eu261_rules import EU261Rules
 from flight_verifier import FlightVerifier
+from claim_database import ClaimDatabase
 from typing import Optional
 import re
 import os
@@ -18,11 +19,30 @@ class SimpleClaimChatbot:
     def __init__(self):
         self.conversation_state = {}
         self.flight_verifier = FlightVerifier()
+        self.claim_db = ClaimDatabase()
 
     def extract_number(self, text):
         """Extract numbers from text"""
         numbers = re.findall(r"\d+(?:\.\d+)?", text)
         return float(numbers[0]) if numbers else None
+
+    def extract_email(self, text):
+        """Extract email address from text"""
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        match = re.search(email_pattern, text)
+        return match.group(0) if match else None
+
+    def extract_name(self, text):
+        """Extract name from text - simple heuristic"""
+        # Remove common phrases to isolate name
+        text = re.sub(r'(my name is|i am|i\'m|name:)\s*', '', text.lower())
+        # Look for capitalized words (2-4 words)
+        words = text.split()
+        name_parts = []
+        for word in words:
+            if word and word[0].isupper() and len(name_parts) < 4:
+                name_parts.append(word)
+        return ' '.join(name_parts) if name_parts else None
 
     def extract_flight_number(self, text):
         """Extract flight number from text (e.g., KL1234, BA456, TEST001, or just 0895)"""
@@ -56,6 +76,10 @@ class SimpleClaimChatbot:
         if match:
             return match.group(0)
 
+        
+        # Check if we're awaiting claim submission details
+        if state.get("awaiting_submission"):
+            return self.process_claim_submission(message, state)
         # Match YYYY/MM/DD format
         match = re.search(r"\b(\d{4})/(\d{2})/(\d{2})\b", text)
         if match:
@@ -79,6 +103,7 @@ class SimpleClaimChatbot:
         # This prevents misinterpreting flight numbers as delay hours
         flight_number = self.extract_flight_number(message)
         if flight_number:
+            state["flight_number"] = flight_number  # Store for later use
             flight_date = self.extract_date(message)
 
             # Check if this is likely a flight verification request
@@ -192,24 +217,9 @@ class SimpleClaimChatbot:
             "amsterdam madrid": 1450,
         }
 
-        message_lower = message.lower()
-        for route, distance in routes.items():
-            if all(city in message_lower for city in route.split()):
-                state["distance_km"] = distance
-                return True
-        return False
-
-    def calculate_and_respond(self, state):
-        """Calculate compensation and format response"""
-        result = EU261Rules.calculate_claim_amount(
-            delay_hours=state.get("delay_hours", 0),
-            distance_km=state.get("distance_km", 0),
-            cancellation=state.get("scenario") == "cancellation",
-            denied_boarding=state.get("denied_boarding", False),
-            extraordinary_circumstance=state.get("extraordinary_circumstance"),
-            advance_notice_days=state.get("advance_notice_days"),
-            number_of_passengers=state.get("passengers", 1),
-        )
+        
+        # Store result in state for later submission
+        state["compensation_result"] = result
 
         response = "📊 **Compensation Assessment**\n\n"
 
@@ -219,6 +229,33 @@ class SimpleClaimChatbot:
             response += f"**Details:**\n"
             response += f"- Distance: {result['distance_km']} km ({result['distance_category']})\n"
             if result["delay_hours"] > 0:
+                response += f"- Delay: {result['delay_hours']} hours\n"
+            response += f"- Compensation per passenger: €{result['compensation_per_passenger']}\n"
+            if result["number_of_passengers"] > 1:
+                response += (
+                    f"- Number of passengers: {result['number_of_passengers']}\n"
+                )
+                response += (
+                    f"- **Total compensation: €{result['total_compensation']}**\n"
+                )
+            else:
+                response += (
+                    f"- **Total compensation: €{result['total_compensation']}**\n"
+                )
+
+            # Ask for contact information to submit claim
+            if not state.get("claim_submitted"):
+                response += f"\n📝 **To submit your claim, please provide:**\n"
+                response += f"1. Your email address\n"
+                response += f"2. Your full name\n"
+                response += f"3. Flight date (YYYY-MM-DD)\n\n"
+                response += f"Example: 'My email is john@email.com, my name is John Smith, flight date was 2026-03-10'\n"
+                state["awaiting_submission"] = True
+            else:
+                response += f"\n**Next steps:**\n"
+                response += f"1. File a claim with KLM customer service\n"
+                response += f"2. Include your booking reference and flight details\n"
+                if result["delay_hours"] > 0:
                 response += f"- Delay: {result['delay_hours']} hours\n"
             response += f"- Compensation per passenger: €{result['compensation_per_passenger']}\n"
             if result["number_of_passengers"] > 1:
@@ -292,6 +329,103 @@ Go ahead, tell me what happened! 😊"""
         """Verify flight using AviationStack API"""
         result = self.flight_verifier.verify_flight(flight_number, flight_date)
         return self.flight_verifier.format_decision(result)
+
+    def process_claim_submission(self, message, state):
+        """Process claim submission with email, name, and flight date"""
+        email = self.extract_email(message)
+        name = self.extract_name(message)
+        flight_date = self.extract_date(message)
+        
+        # Store what we found
+        if email:
+            state["email"] = email
+        if name:
+            state["passenger_name"] = name
+        if flight_date:
+            state["flight_date"] = flight_date
+            
+        # Check if we have all required information
+        missing = []
+        if not state.get("email"):
+            missing.append("email address")
+        if not state.get("passenger_name"):
+            missing.append("full name")
+        if not state.get("flight_date"):
+            missing.append("flight date (YYYY-MM-DD)")
+        if not state.get("flight_number"):
+            missing.append("flight number")
+            
+        if missing:
+            return f"I still need your {', '.join(missing)}. Please provide them."
+        
+        # All information collected - check for duplicate
+        is_duplicate, existing_claim = self.claim_db.check_duplicate(
+            email=state["email"],
+            flight_number=state["flight_number"],
+            flight_date=state["flight_date"]
+        )
+        
+        if is_duplicate:
+            response = "⚠️ **Duplicate Claim Detected!**\n\n"
+            response += f"You have already submitted a claim for this flight:\n\n"
+            response += f"**Previous Submission Details:**\n"
+            response += f"- Submission ID: {existing_claim['submission_id']}\n"
+            response += f"- Flight: {existing_claim['flight_number']}\n"
+            response += f"- Date: {existing_claim['flight_date']}\n"
+            response += f"- Route: {existing_claim['route']}\n"
+            response += f"- Status: {existing_claim['status'].upper()}\n"
+            response += f"- Submitted on: {existing_claim['submitted_at'][:10]}\n"
+            response += f"- Compensation amount: €{existing_claim['compensation_amount']}\n\n"
+            response += "**You cannot submit multiple claims for the same flight.**\n\n"
+            
+            if existing_claim['status'] == 'pending':
+                response += "Your claim is currently being processed. Please wait for a decision.\n"
+            elif existing_claim['status'] == 'approved':
+                response += "Your claim was already approved!\n"
+            elif existing_claim['status'] == 'rejected':
+                response += "Your previous claim was rejected. Contact customer service if you believe this was an error.\n"
+                
+            response += "\nWould you like to check a different flight?"
+            state["awaiting_submission"] = False
+            return response
+        
+        # No duplicate - submit the claim
+        result = state.get("compensation_result", {})
+        
+        # Determine route from distance or use generic
+        route = "Unknown Route"
+        if state.get("departure") and state.get("arrival"):
+            route = f"{state['departure']} -> {state['arrival']}"
+            
+        submission = self.claim_db.add_submission(
+            email=state["email"],
+            flight_number=state["flight_number"],
+            flight_date=state["flight_date"],
+            passenger_name=state["passenger_name"],
+            compensation_amount=result.get("total_compensation", 0),
+            delay_hours=result.get("delay_hours", 0),
+            route=route,
+            status="pending"
+        )
+        
+        response = "✅ **Claim Submitted Successfully!**\n\n"
+        response += f"**Submission Details:**\n"
+        response += f"- Submission ID: {submission['submission_id']}\n"
+        response += f"- Passenger: {submission['passenger_name']}\n"
+        response += f"- Email: {submission['email']}\n"
+        response += f"- Flight: {submission['flight_number']}\n"
+        response += f"- Date: {submission['flight_date']}\n"
+        response += f"- Compensation: €{submission['compensation_amount']}\n\n"
+        response += "**Next Steps:**\n"
+        response += "1. You will receive a confirmation email shortly\n"
+        response += "2. Your claim will be reviewed within 7-14 business days\n"
+        response += "3. Track your claim status using the Submission ID above\n\n"
+        response += "Would you like to check another flight?"
+        
+        state["claim_submitted"] = True
+        state["awaiting_submission"] = False
+        
+        return response
 
     def get_help_message(self, state):
         if not state.get("scenario"):

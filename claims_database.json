@@ -1,0 +1,101 @@
+{
+  "submissions": [
+    {
+      "submission_id": "CLM202601150001",
+      "email": "john.smith@email.com",
+      "passenger_name": "John Smith",
+      "flight_number": "KL1234",
+      "flight_date": "2026-01-15",
+      "route": "AMS -> JFK",
+      "delay_hours": 4.5,
+      "compensation_amount": 600.0,
+      "status": "approved",
+      "submitted_at": "2026-01-16T10:30:00"
+    },
+    {
+      "submission_id": "CLM202601200002",
+      "email": "maria.garcia@email.com",
+      "passenger_name": "Maria Garcia",
+      "flight_number": "KL0895",
+      "flight_date": "2026-01-20",
+      "route": "AMS -> BCN",
+      "delay_hours": 3.5,
+      "compensation_amount": 250.0,
+      "status": "pending",
+      "submitted_at": "2026-01-21T14:15:00"
+    },
+    {
+      "submission_id": "CLM202602010003",
+      "email": "pierre.dubois@email.com",
+      "passenger_name": "Pierre Dubois",
+      "flight_number": "KL1956",
+      "flight_date": "2026-02-01",
+      "route": "AMS -> CDG",
+      "delay_hours": 5.0,
+      "compensation_amount": 250.0,
+      "status": "approved",
+      "submitted_at": "2026-02-02T09:45:00"
+    },
+    {
+      "submission_id": "CLM202602100004",
+      "email": "anna.mueller@email.com",
+      "passenger_name": "Anna Mueller",
+      "flight_number": "KL1234",
+      "flight_date": "2026-02-10",
+      "route": "AMS -> JFK",
+      "delay_hours": 4.0,
+      "compensation_amount": 600.0,
+      "status": "rejected",
+      "submitted_at": "2026-02-11T16:20:00"
+    },
+    {
+      "submission_id": "CLM202603010005",
+      "email": "carlos.rodriguez@email.com",
+      "passenger_name": "Carlos Rodriguez",
+      "flight_number": "KL0703",
+      "flight_date": "2026-03-01",
+      "route": "AMS -> MAD",
+      "delay_hours": 3.0,
+      "compensation_amount": 250.0,
+      "status": "pending",
+      "submitted_at": "2026-03-02T11:30:00"
+    },
+    {
+      "submission_id": "CLM202603050006",
+      "email": "lisa.anderson@email.com",
+      "passenger_name": "Lisa Anderson",
+      "flight_number": "KL0643",
+      "flight_date": "2026-03-05",
+      "route": "AMS -> LHR",
+      "delay_hours": 2.5,
+      "compensation_amount": 0.0,
+      "status": "rejected",
+      "submitted_at": "2026-03-06T08:15:00"
+    },
+    {
+      "submission_id": "CLM202603100007",
+      "email": "john.smith@email.com",
+      "passenger_name": "John Smith",
+      "flight_number": "KL0895",
+      "flight_date": "2026-03-10",
+      "route": "AMS -> BCN",
+      "delay_hours": 4.0,
+      "compensation_amount": 250.0,
+      "status": "pending",
+      "submitted_at": "2026-03-11T13:45:00"
+    },
+    {
+      "submission_id": "CLM202603170008",
+      "email": "newuser@email.com",
+      "passenger_name": "New User",
+      "flight_number": "KL9999",
+      "flight_date": "2026-03-20",
+      "route": "AMS -> LHR",
+      "delay_hours": 4.5,
+      "compensation_amount": 400.0,
+      "status": "approved",
+      "submitted_at": "2026-03-17T10:55:04.896352",
+      "updated_at": "2026-03-17T10:55:04.896744"
+    }
+  ]
+}
