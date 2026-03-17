@@ -1,0 +1,396 @@
+{
+  "generated_at": "2026-03-17T11:19:13.026560",
+  "source": "https://www.schiphol.nl/en/airlines",
+  "airlines": [
+    {
+      "claim_page_title": null,
+      "name": "Aegean Airlines",
+      "claim_url": null
+    },
+    {
+      "name": "Aer Lingus",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Aeromexico",
+      "claim_url": null
+    },
+    {
+      "name": "Air Arabia Maroc",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Air Astana",
+      "claim_url": null
+    },
+    {
+      "name": "Air Canada",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Air Dolomiti",
+      "claim_url": null
+    },
+    {
+      "name": "Air Europa",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Air France",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Air India",
+      "claim_url": null
+    },
+    {
+      "name": "Air Serbia",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Air Transat",
+      "claim_url": null
+    },
+    {
+      "name": "airBaltic",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Ajet",
+      "claim_url": null
+    },
+    {
+      "name": "American Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Arkia Israel Airlines",
+      "claim_url": null
+    },
+    {
+      "name": "Austrian Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "British Airways",
+      "claim_url": null
+    },
+    {
+      "name": "Bulgaria Air",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Cathay Pacific Airways",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "China Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "China Eastern Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "China Southern Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Corendon Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Corendon Dutch Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Croatia Airlines",
+      "claim_url": null
+    },
+    {
+      "name": "Delta Air Lines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "easyJet",
+      "claim_url": null
+    },
+    {
+      "name": "EasyJet Switzerland",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Egyptair",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "El Al Israel Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Emirates",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Etihad Airways",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "EVA Air",
+      "claim_url": null
+    },
+    {
+      "name": "Finnair",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Flyone",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Garuda Indonesia",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Georgian Airways",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Iberia",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Iberia Express",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Icelandair",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Indigo",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "ITA Airways",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "JetBlue",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Kenya Airways",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "KLM Cityhopper",
+      "claim_url": null
+    },
+    {
+      "name": "KLM Royal Dutch Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "KM Malta Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Korean Air",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Kuwait Airways",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "LOT Polish Airlines",
+      "claim_url": null
+    },
+    {
+      "name": "Lufthansa German Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Norwegian Air International",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Norwegian Air Shuttle",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Oman Air",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Pegasus Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Qatar Airways",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Royal Air Maroc",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Royal Jordanian Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Ryanair",
+      "claim_url": null
+    },
+    {
+      "name": "SAS Scandinavian Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Saudia Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Singapore Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "SKY express",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "SunExpress Airlines",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "name": "Surinam Airways",
+      "claim_url": null,
+      "claim_page_title": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Swiss Int. Air Lines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "TAP Air Portugal",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Tarom",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Transavia",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Transavia France",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "TUI fly",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Turkish Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "United Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "UR Airlines",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Vueling",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "WestJet",
+      "claim_url": null
+    },
+    {
+      "claim_page_title": null,
+      "name": "Xiamen Air",
+      "claim_url": null
+    }
+  ]
+}
