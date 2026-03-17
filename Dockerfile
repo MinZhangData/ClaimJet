@@ -10,15 +10,14 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
-COPY chatbot_adk.py .
-COPY adk_agent.py .
-COPY eu261_rules.py .
-COPY flight_verifier.py .
-COPY memory_bank.py .
+# Copy application structure
+COPY app/ ./app/
+COPY config/ ./config/
+COPY run.py .
 
 # Expose port (Cloud Run will set PORT env variable)
 ENV PORT=8080
+ENV PYTHONUNBUFFERED=1
 
-# Run the ADK chatbot - it will use PORT env variable via GRADIO_SERVER_PORT
-CMD ["sh", "-c", "export GRADIO_SERVER_PORT=${PORT:-8080} && python chatbot_adk.py"]
+# Run the application - it will use PORT env variable via GRADIO_SERVER_PORT
+CMD ["sh", "-c", "export GRADIO_SERVER_PORT=${PORT:-8080} && python run.py"]

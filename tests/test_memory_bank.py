@@ -7,9 +7,9 @@ import os
 import sys
 from pathlib import Path
 
-# Add parent directory to path for imports
-parent_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(parent_dir))
+# Add project root to path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Set up environment
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
@@ -17,7 +17,7 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
 )
 os.environ["GCP_PROJECT"] = "qwiklabs-asl-03-7e6910d4e317"
 
-from memory_bank import get_memory_bank
+from app.core.memory_bank import get_memory_bank
 
 
 def test_memory_bank():

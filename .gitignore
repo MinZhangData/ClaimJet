@@ -40,3 +40,8 @@ credentials.json
 *.tmp
 *.bak
 .env
+
+# Backup folders
+_old/
+_backup/
+backup/

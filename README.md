@@ -2,6 +2,8 @@
 
 An intelligent chatbot powered by **Google Gemini 2.5 Flash** to help passengers check flight compensation eligibility under EU261 regulations.
 
+**⭐ Production App:** https://claimjet-final-118562953748.us-central1.run.app
+
 ---
 
 ## 🏗️ Architecture Overview
@@ -258,7 +260,14 @@ Output: Detailed information about EU261 rules
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Cloud Run (Serverless)                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  claimjet-memory-bank (Latest - Recommended)                    │
+│  claimjet-final (⭐ PRODUCTION - Latest)                        │
+│  • Refactored package structure (v3.0)                          │
+│  • ADK + Memory Bank + Model Armor                              │
+│  • URL: https://claimjet-final-118562953748.us-central1.run.app│
+│  • Image: gcr.io/.../claimjet-final:v3                          │
+│  • Memory: 1Gi, CPU: 1, Timeout: 300s                           │
+├─────────────────────────────────────────────────────────────────┤
+│  claimjet-memory-bank (Previous Production)                     │
 │  • ADK + Memory Bank + Model Armor                              │
 │  • URL: https://claimjet-memory-bank-...-run.app                │
 │  • Image: gcr.io/.../claimjet-memory-bank:v2                    │
@@ -300,24 +309,36 @@ Output: Detailed information about EU261 rules
 
 ```
 ClaimJet/
-├── Core Application
-│   ├── chatbot_adk.py          # Gradio UI + Session Management
-│   ├── adk_agent.py            # ADK Agent + Memory Bank Integration
-│   ├── memory_bank.py          # Firestore Conversation Storage
-│   ├── flight_verifier.py      # Flight Data Verification
-│   └── eu261_rules.py          # EU261 Rules Engine
+├── app/                        # Application Package
+│   ├── __init__.py
+│   ├── core/                   # Core Business Logic
+│   │   ├── __init__.py
+│   │   ├── agent.py           # ADK Agent + Memory Bank Integration
+│   │   └── memory_bank.py     # Firestore Conversation Storage
+│   ├── services/               # External Services & Rules
+│   │   ├── __init__.py
+│   │   ├── flight_verifier.py # Flight Data Verification
+│   │   └── eu261_rules.py     # EU261 Rules Engine
+│   ├── models/                 # Data Models (future)
+│   │   └── __init__.py
+│   └── utils/                  # Utility Functions (future)
+│       └── __init__.py
 │
-├── Configuration
-│   ├── requirements.txt        # Python Dependencies
-│   ├── Dockerfile              # Container Build Instructions
-│   ├── .env                    # Environment Variables (local only)
-│   └── .env.example            # Environment Variables Template
+├── config/                     # Configuration Management
+│   └── __init__.py            # Application Configuration
 │
-├── Documentation
-│   └── README.md               # Complete Project Documentation
+├── tests/                      # Test Suite
+│   ├── __init__.py
+│   └── test_memory_bank.py    # Memory Bank Integration Tests
 │
-└── tests/
-    └── test_memory_bank.py     # Memory Bank Integration Tests
+├── scripts/                    # Utility Scripts (future)
+│
+├── run.py                      # Main Application Entry Point
+├── requirements.txt            # Python Dependencies
+├── Dockerfile                  # Container Build Instructions
+├── .env                        # Environment Variables (local only, gitignored)
+├── .env.example                # Environment Variables Template
+└── README.md                   # Complete Project Documentation
 ```
 
 ---
@@ -395,15 +416,15 @@ Open browser: http://localhost:7860
 ### 5. Deploy to Cloud Run
 ```bash
 # Build and deploy
-gcloud builds submit --tag gcr.io/$PROJECT_ID/claimjet-memory-bank:v1
+gcloud builds submit --tag gcr.io/$PROJECT_ID/claimjet-final:v3
 
-gcloud run deploy claimjet-memory-bank \
-  --image gcr.io/$PROJECT_ID/claimjet-memory-bank:v1 \
+gcloud run deploy claimjet-final \
+  --image gcr.io/$PROJECT_ID/claimjet-final:v3 \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
-  --memory 2Gi \
-  --cpu 2 \
+  --memory 1Gi \
+  --cpu 1 \
   --timeout 300 \
   --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
   --project=$PROJECT_ID
@@ -552,7 +573,8 @@ gcloud projects get-iam-policy $PROJECT_ID \
   --flatten="bindings[].members" \
   --filter="bindings.members:serviceAccount:ai-agent-sa@*"
 
-# Test locally
+# Test locally (with virtual environment activated)
+source .venv/bin/activate
 python tests/test_memory_bank.py
 ```
 
@@ -568,10 +590,10 @@ gcloud secrets versions access latest --secret=gemini-api-key
 ### Deployment Issues
 ```bash
 # Check Cloud Run logs
-gcloud run services logs read claimjet-memory-bank --limit 50
+gcloud run services logs read claimjet-final --limit 50
 
 # Describe service
-gcloud run services describe claimjet-memory-bank --region us-central1
+gcloud run services describe claimjet-final --region us-central1
 ```
 
 ---
@@ -589,7 +611,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="path/to/key.json"
 export GCP_PROJECT="your-project-id"
 
 # 3. Run chatbot
-python chatbot_adk.py
+python run.py
 
 # 4. Test changes
 python tests/test_memory_bank.py
@@ -598,19 +620,19 @@ python tests/test_memory_bank.py
 ### Build & Deploy
 ```bash
 # 1. Build Docker image
-docker build -t gcr.io/$PROJECT_ID/claimjet-memory-bank:latest .
+docker build -t gcr.io/$PROJECT_ID/claimjet-final:latest .
 
 # 2. Test locally
 docker run -p 8080:8080 \
   -e GEMINI_API_KEY="$GEMINI_API_KEY" \
-  gcr.io/$PROJECT_ID/claimjet-memory-bank:latest
+  gcr.io/$PROJECT_ID/claimjet-final:latest
 
 # 3. Push to GCR
-docker push gcr.io/$PROJECT_ID/claimjet-memory-bank:latest
+docker push gcr.io/$PROJECT_ID/claimjet-final:latest
 
 # 4. Deploy to Cloud Run
-gcloud run deploy claimjet-memory-bank \
-  --image gcr.io/$PROJECT_ID/claimjet-memory-bank:latest \
+gcloud run deploy claimjet-final \
+  --image gcr.io/$PROJECT_ID/claimjet-final:latest \
   --region us-central1
 ```
 
@@ -626,14 +648,14 @@ gcloud run deploy claimjet-memory-bank \
 
 ### Testing
 ```bash
+# Activate virtual environment first
+source .venv/bin/activate
+
 # Run Memory Bank tests
 python tests/test_memory_bank.py
 
-# Test ADK agent
-python adk_agent.py
-
-# Test UI locally
-python chatbot_adk.py
+# Test application locally
+python run.py
 ```
 
 ---
@@ -673,7 +695,8 @@ python chatbot_adk.py
 - **Service Account:** ai-agent-sa@qwiklabs-asl-03-7e6910d4e317.iam.gserviceaccount.com
 
 **Live Services:**
-- **Production:** https://claimjet-memory-bank-118562953748.us-central1.run.app
+- **⭐ Production (Latest):** https://claimjet-final-118562953748.us-central1.run.app
+- **Previous Production:** https://claimjet-memory-bank-118562953748.us-central1.run.app
 
 **For Issues:**
 1. Check logs: `gcloud logging read "resource.type=cloud_run_revision"`
@@ -695,4 +718,4 @@ Built with:
 
 **Status:** ✅ Production Ready  
 **Last Updated:** March 17, 2026  
-**Version:** 2.0.0 (Memory Bank Enabled)
+**Version:** 3.0.0 (Refactored Package Structure)

@@ -8,24 +8,31 @@ from datetime import datetime
 from typing import Optional, Dict, List
 from google import genai
 from google.genai import types
-from flight_verifier import FlightVerifier
-from eu261_rules import EU261Rules
 from dotenv import load_dotenv
-from memory_bank import get_memory_bank
+
+from app.services.flight_verifier import FlightVerifier
+from app.services.eu261_rules import EU261Rules
+from app.core.memory_bank import get_memory_bank
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Initialize the GenAI client
-# Use Gemini API with API key (get from https://aistudio.google.com/apikey)
-api_key = os.environ.get("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError(
-        "GEMINI_API_KEY environment variable is required. "
-        "Get your API key from: https://aistudio.google.com/apikey"
-    )
+# Global client variable (initialized on first use)
+_client = None
 
-client = genai.Client(api_key=api_key)
+
+def get_genai_client():
+    """Get or create the GenAI client"""
+    global _client
+    if _client is None:
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY environment variable is required. "
+                "Get your API key from: https://aistudio.google.com/apikey"
+            )
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 # Define tools for the ADK agent
@@ -222,6 +229,7 @@ Test flights available:
                     )
 
             # Create a chat session with tools
+            client = get_genai_client()
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=enhanced_message,

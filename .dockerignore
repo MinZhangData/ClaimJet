@@ -36,3 +36,4 @@ ai-agent-key.json
 # Other
 .DS_Store
 .ruff_cache/
+.env.example
