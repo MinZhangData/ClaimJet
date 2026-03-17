@@ -15,6 +15,7 @@ COPY chatbot_adk.py .
 COPY adk_agent.py .
 COPY eu261_rules.py .
 COPY flight_verifier.py .
+COPY memory_bank.py .
 
 # Expose port (Cloud Run will set PORT env variable)
 ENV PORT=8080

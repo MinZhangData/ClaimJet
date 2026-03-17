@@ -3,5 +3,5 @@ vertexai>=0.0.1
 google-genai>=1.0.0
 gradio>=4.0.0
 requests>=2.31.0
-google-cloud-model-armor>=0.1.0
 python-dotenv>=1.0.0
+google-cloud-firestore>=2.14.0

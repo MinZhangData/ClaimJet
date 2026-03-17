@@ -5,12 +5,13 @@ Uses Google ADK to create an intelligent agent for EU261 compensation claims
 
 import os
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from google import genai
 from google.genai import types
 from flight_verifier import FlightVerifier
 from eu261_rules import EU261Rules
 from dotenv import load_dotenv
+from memory_bank import get_memory_bank
 
 # Load environment variables from .env file
 load_dotenv()
@@ -160,6 +161,7 @@ class FlightCompensationAgent:
 
     def __init__(self):
         self.tools = [verify_flight_data, calculate_compensation, get_eu261_info]
+        self.memory_bank = get_memory_bank()
 
         self.system_instruction = """You are a helpful flight compensation assistant specializing in EU261 regulations.
 
@@ -188,22 +190,41 @@ Test flights available:
 - TEST002: Short-haul delayed 4h15m (€250 compensation)
 """
 
-    def chat(self, user_message: str, history: Optional[list] = None) -> str:
+    def chat(
+        self,
+        user_message: str,
+        history: Optional[list] = None,
+        session_id: Optional[str] = None,
+    ) -> str:
         """
         Process user message and return agent response
 
         Args:
             user_message: User's input message
-            history: Optional conversation history
+            history: Optional conversation history (from UI)
+            session_id: Optional session ID for persistent memory
 
         Returns:
             Agent's response
         """
         try:
+            # Build context with memory bank history if session_id is provided
+            enhanced_message = user_message
+
+            if session_id and self.memory_bank.enabled:
+                # Get conversation context from memory bank
+                context = self.memory_bank.get_context_summary(
+                    session_id, max_messages=10
+                )
+                if context:
+                    enhanced_message = (
+                        f"{context}\n\nCurrent user message: {user_message}"
+                    )
+
             # Create a chat session with tools
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=user_message,
+                contents=enhanced_message,
                 config=types.GenerateContentConfig(
                     system_instruction=self.system_instruction,
                     tools=self.tools,
@@ -211,14 +232,31 @@ Test flights available:
                 ),
             )
 
-            # Return the response text
-            if response.text:
-                return response.text
-            else:
-                return "I apologize, but I couldn't process that request. Please try rephrasing or provide a flight number to verify."
+            # Get the response text
+            response_text = (
+                response.text
+                if response.text
+                else "I apologize, but I couldn't process that request. Please try rephrasing or provide a flight number to verify."
+            )
+
+            # Store in memory bank if session_id is provided
+            if session_id and self.memory_bank.enabled:
+                self.memory_bank.add_message(session_id, "user", user_message)
+                self.memory_bank.add_message(session_id, "assistant", response_text)
+
+            return response_text
 
         except Exception as e:
-            return f"❌ Error: {str(e)}\n\nPlease try again or contact support if the issue persists."
+            error_msg = f"❌ Error: {str(e)}\n\nPlease try again or contact support if the issue persists."
+
+            # Still try to save error context
+            if session_id and self.memory_bank.enabled:
+                self.memory_bank.add_message(session_id, "user", user_message)
+                self.memory_bank.add_message(
+                    session_id, "assistant", error_msg, {"error": True}
+                )
+
+            return error_msg
 
 
 def test_adk_agent():
