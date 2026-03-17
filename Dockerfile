@@ -11,6 +11,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
+COPY chatbot_adk.py .
+COPY adk_agent.py .
 COPY chatbot.py .
 COPY eu261_rules.py .
 COPY flight_verifier.py .
@@ -18,6 +20,5 @@ COPY flight_verifier.py .
 # Expose port (Cloud Run will set PORT env variable)
 ENV PORT=8080
 
-# Update chatbot.py to use environment PORT variable
-# Run the application
-CMD python -c "import os; import chatbot; chatbot.demo.launch(server_name='0.0.0.0', server_port=int(os.environ.get('PORT', 8080)), share=False, show_error=True)"
+# Run the ADK chatbot - it will use PORT env variable via GRADIO_SERVER_PORT
+CMD ["sh", "-c", "export GRADIO_SERVER_PORT=${PORT:-8080} && python chatbot_adk.py"]
