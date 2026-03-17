@@ -1,26 +1,23 @@
 import requests
 import json
 import os
-from datetime import datetime
 from eu261_decision_rule import EU261DecisionRule
 
 
-def get_flight_by_date_and_number(flights_data, flight_date, flight_number):
+def get_flights_by_airport_and_number(flights_data, flight_number):
     """
-    Get all flights matching specific flight_date and flight_number.
+    Get all flights matching a specific flight number.
     
     Args:
-        flights_data: API response containing list of flights
-        flight_date: Date in format 'YYYY-MM-DD' (e.g., '2026-03-17')
-        flight_number: Flight number as string (e.g., '4929' or '1605')
+        flights_data: Timetable API response containing list of flights
+        flight_number: Flight number as string (e.g., '4511')
     
     Returns:
         List of matching flight dictionaries
     """
     matching_flights = []
     for flight in flights_data.get('data', []):
-        if (flight.get('flight_date') == flight_date and 
-            flight.get('flight', {}).get('number') == flight_number):
+        if flight.get('flight', {}).get('number') == flight_number:
             matching_flights.append(flight)
     return matching_flights
 
@@ -46,21 +43,29 @@ def display_flight_details(flight):
     print(f"\n{'='*70}")
     print(f"FLIGHT DETAILS")
     print(f"{'='*70}")
-    print(f"Date: {flight.get('flight_date')}")
-    print(f"IATA Code: {flight_info.get('iata', 'N/A')}")
+    print(f"IATA Code: {flight_info.get('iataNumber', 'N/A')}")
     print(f"Flight Number: {flight_info.get('number', 'N/A')}")
-    print(f"Status: {flight.get('flight_status', 'N/A')}")
-    print(f"Airline: {airline.get('name', 'N/A')} ({airline.get('iata', 'N/A')})")
+    print(f"Status: {flight.get('status', 'N/A')}")
+    print(f"Type: {flight.get('type', 'N/A')}")
+    print(f"Airline: {airline.get('name', 'N/A')} ({airline.get('iataCode', 'N/A')})")
     print()
     print(f"DEPARTURE:")
-    print(f"  Airport: {departure.get('airport', 'N/A')} ({departure.get('iata', 'N/A')})")
-    print(f"  Scheduled: {departure.get('scheduled', 'N/A')}")
-    print(f"  Delay: {departure.get('delay', 'N/A')} min")
+    print(f"  Airport: {departure.get('iataCode', 'N/A')} ({departure.get('icaoCode', 'N/A')})")
+    print(f"  Terminal: {departure.get('terminal', 'N/A')}")
+    print(f"  Gate: {departure.get('gate', 'N/A')}")
+    print(f"  Scheduled: {departure.get('scheduledTime', 'N/A')}")
+    print(f"  Actual: {departure.get('actualTime', 'N/A')}")
+    delay_str = str(departure.get('delay', 'N/A'))
+    print(f"  Delay: {delay_str} min")
     print()
     print(f"ARRIVAL:")
-    print(f"  Airport: {arrival.get('airport', 'N/A')} ({arrival.get('iata', 'N/A')})")
-    print(f"  Scheduled: {arrival.get('scheduled', 'N/A')}")
-    print(f"  Delay: {arrival.get('delay', 'N/A')} min")
+    print(f"  Airport: {arrival.get('iataCode', 'N/A')} ({arrival.get('icaoCode', 'N/A')})")
+    print(f"  Terminal: {arrival.get('terminal', 'N/A')}")
+    print(f"  Gate: {arrival.get('gate', 'N/A')}")
+    print(f"  Scheduled: {arrival.get('scheduledTime', 'N/A')}")
+    print(f"  Actual: {arrival.get('actualTime', 'N/A')}")
+    delay_str = str(arrival.get('delay', 'N/A'))
+    print(f"  Delay: {delay_str} min")
     print(f"{'='*70}")
 
 
@@ -72,16 +77,8 @@ def main():
     print("FLIGHT DELAY ANALYSIS - EU 261/2004 Compensation Checker")
     print("="*70)
     
-    flight_date = input("\nEnter flight date (YYYY-MM-DD, e.g., 2026-03-17): ").strip()
-    flight_number = input("Enter flight number (e.g., 4929 or 1605): ").strip()
-    
-    # Validate date format
-    try:
-        datetime.strptime(flight_date, '%Y-%m-%d')
-    except ValueError:
-        print(f"\n❌ Invalid date format: {flight_date}")
-        print("Please use format YYYY-MM-DD")
-        return
+    print("\nSearch by flight NUMBER from loaded timetable data:")
+    flight_number = input("Enter flight number (e.g., 4511): ").strip()
     
     # Try to load from local file first (useful for testing/demo)
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -99,26 +96,21 @@ def main():
     
     # Fall back to API if local file not available or doesn't have data
     if not api_response or not api_response.get('data'):
-        print(f"\n🌐 Fetching from Aviation Stack API...")
+        print(f"\n🌐 Fetching from Aviation Stack Timetable API...")
         
         params = {
             'access_key': 'e20e7bed45a2ceacb137580a8dae223f',
-            'flight_date': flight_date,
-            'flight_number': flight_number
+            'type': 'arrival'
         }
         
         try:
-            api_result = requests.get('https://api.aviationstack.com/v1/flights', params)
+            api_result = requests.get('https://api.aviationstack.com/v1/timetable', params)
             api_response = api_result.json()
-            source = "API (date + flight number filter)"
+            source = "API (arrival timetable)"
             
-            # If no results, try without filters for local filtering
-            if not api_response.get('data'):
-                print(f"⚠️  No results with date filter. Trying general search...")
-                params = {'access_key': 'e20e7bed45a2ceacb137580a8dae223f'}
-                api_result = requests.get('https://api.aviationstack.com/v1/flights', params)
-                api_response = api_result.json()
-                source = "API (general) - filtered locally"
+            if api_response.get('error'):
+                print(f"⚠️  API Error: {api_response['error'].get('info', 'Unknown error')}")
+                return
         
         except requests.exceptions.RequestException as e:
             print(f"\n❌ API Error: {e}")
@@ -127,12 +119,11 @@ def main():
             print(f"\n❌ Error parsing API response")
             return
     
-    # Get matching flights
-    matching_flights = get_flight_by_date_and_number(api_response, flight_date, flight_number)
+    # Get matching flights by flight number
+    matching_flights = get_flights_by_airport_and_number(api_response, flight_number)
     
     if not matching_flights:
         print(f"\n❌ No flights found matching your criteria.")
-        print(f"   Date: {flight_date}")
         print(f"   Flight Number: {flight_number}")
         print(f"   Source: {source}")
         return

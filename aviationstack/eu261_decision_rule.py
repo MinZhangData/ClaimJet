@@ -53,12 +53,36 @@ class EU261DecisionRule:
         Initialize with flight data from API.
         
         Args:
-            flight_data: Dictionary containing flight information from api_results.json
+            flight_data: Dictionary containing flight information from Timetable API
         """
         self.flight_data = flight_data
-        self.departure_delay = flight_data.get("departure", {}).get("delay")
-        self.arrival_delay = flight_data.get("arrival", {}).get("delay")
-        self.flight_status = flight_data.get("flight_status")
+        self.flight_status = flight_data.get('status', 'unknown').lower()
+        
+        # Parse departure delay (may be string or null)
+        departure_delay = flight_data.get('departure', {}).get('delay')
+        self.departure_delay = self._parse_delay(departure_delay)
+        
+        # Parse arrival delay (may be string or null)
+        arrival_delay = flight_data.get('arrival', {}).get('delay')
+        self.arrival_delay = self._parse_delay(arrival_delay)
+    
+    def _parse_delay(self, delay_value) -> Optional[int]:
+        """
+        Parse delay value which may be string, int, or null.
+        
+        Args:
+            delay_value: Delay value (string, int, or None)
+        
+        Returns:
+            Delay in minutes as integer, or None if not available
+        """
+        if delay_value is None:
+            return None
+        
+        try:
+            return int(str(delay_value).strip())
+        except (ValueError, AttributeError):
+            return None
     
     def evaluate(self, 
                  is_extraordinary_circumstance: bool = False,
@@ -75,16 +99,18 @@ class EU261DecisionRule:
             DelayAnalysis object with eligibility status and reasoning
         """
         
-        # Rule 1: Check if flight is completed (actual arrival must exist)
-        if self.flight_status in ["scheduled", "active", "delayed"]:
-            if not self.flight_data.get("arrival", {}).get("actual"):
-                return DelayAnalysis(
-                    status=EligibilityStatus.PENDING,
-                    delay_minutes=self.arrival_delay,
-                    reason="Flight has not yet arrived at final destination. "
-                           "Decision can be made once flight lands.",
-                    is_extraordinary_circumstance=is_extraordinary_circumstance
-                )
+        # Rule 1: Check if flight has actually arrived (actual arrival time must exist)
+        arrival_data = self.flight_data.get('arrival', {})
+        has_arrived = arrival_data.get('actualTime') is not None
+        
+        if not has_arrived:
+            return DelayAnalysis(
+                status=EligibilityStatus.PENDING,
+                delay_minutes=self.arrival_delay,
+                reason="Flight has not yet arrived at final destination. "
+                       "Decision can be made once flight lands.",
+                is_extraordinary_circumstance=is_extraordinary_circumstance
+            )
         
         # Rule 2: If extraordinary circumstance, passenger is not eligible
         if is_extraordinary_circumstance:
@@ -183,9 +209,10 @@ def main():
     print("=" * 70)
     print("EU 261/2004 COMPENSATION ELIGIBILITY ANALYSIS")
     print("=" * 70)
-    print(f"\nFlight: {flight_data['flight']['iata']}")
-    print(f"Status: {flight_data['flight_status']}")
-    print(f"From: {flight_data['departure']['iata']} → To: {flight_data['arrival']['iata']}")
+    print(f"\nFlight: {flight_data['flight']['iataNumber']}")
+    print(f"Status: {flight_data['status']}")
+    print(f"Type: {flight_data['type']}")
+    print(f"From: {flight_data['departure']['iataCode']} → To: {flight_data['arrival']['iataCode']}")
     print()
     print(f"Eligibility Status: {result.status.value.upper()}")
     print(f"Arrival Delay: {result.delay_minutes} minutes")

@@ -67,23 +67,32 @@ This is required because eligibility decisions should remain grounded in explici
 - **DelaySlayer for Passengers**  
   Passenger eligibility guidance app linked from Schiphol channels
 
-### 4.2 Shared reasoning engine
+### 4.2 Shared reasoning engine with divergent workflows
 
-Both products reuse the same backend logic:
+Both products reuse the same flight verification and eligibility evaluation logic, but diverge at the decision point:
 
-1. intake and structure case
-2. verify flight facts
-3. evaluate EU261 eligibility
-4. generate resolution and explanation
+**Airlines workflow:**
+1. User fills complaint form
+2. Flight verification and delay calculation
+3. EU261 eligibility evaluation with confidence scoring
+4. Decision routing: high confidence → automated email; low confidence → human moderation
+
+**Passengers workflow:**
+1. User talks with chatbot
+2. Flight verification and delay calculation
+3. EU261 eligibility evaluation
+4. Decision routing: eligible → redirect to airline page; ineligible → return conclusion
 
 ---
 
-## 5. High-level architecture
+## 5. High-level architecture and workflow
+
+### 5.1 System component diagram
 
 ```text
 +-----------------------------+       +-----------------------------+
 | DelaySlayer for Airlines    |       | DelaySlayer for Passengers  |
-| KLM internal UI / CRM plug  |       | Schiphol web/app interface  |
+| KLM internal UI / CRM plug  |       | Schiphol chatbot interface  |
 +-------------+---------------+       +-------------+---------------+
               |                                     |
               +------------------+  +---------------+
@@ -97,40 +106,75 @@ Both products reuse the same backend logic:
                                     v
                     +-------------------------------+
                     | Claims Orchestrator Service   |
-                    | state machine + workflow      |
+                    | state machine + routing       |
                     +---------------+---------------+
                                     |
-              -------------------------------------------------------
-              |                         |                          |
-              v                         v                          v
-+-------------------------+  +-------------------------+  +-------------------------+
-| Agent 1                 |  | Agent 2                 |  | Agent 3                 |
-| Intake & Structuring    |  | Flight Verification     |  | EU261 Eligibility       |
-+-------------------------+  +-------------------------+  +-------------------------+
-                                    |
-                                    v
-                         +-------------------------+
-                         | Agent 4                 |
-                         | Resolution & Explanation|
-                         +-------------------------+
+                    +-------------------+-------------------+
+                    |                                       |
+                    v                                       v
+        +------------------------+            +------------------------+
+        | Airlines Workflow       |            | Passengers Workflow     |
+        | (Complaint moderation)  |            | (Eligibility guidance)  |
+        +------------------------+            +------------------------+
+                    |                                       |
+                    +-------------------+-------------------+
                                     |
                                     v
                     +-------------------------------+
-                    | Rule Engine / Policy Service  |
-                    | eligibility tables, thresholds|
+                    | Agent: flight_verify          |
+                    | Flight data + delay calc      |
+                    +---------------+---------------+
+                                    |
+                                    v
                     +-------------------------------+
+                    | Rule Engine: EU261 Eligibility|
+                    | Evaluate eligibility & score  |
+                    +---------------+---------------+
+                                    |
+                    +-------------------+-------------------+
+                    |                                       |
+                    v                                       v
+        +------------------------+            +------------------------+
+        | Agent: refund_decision  |            | Eligibility Result      |
+        | (Airlines: email/review)|            | (Passengers: redirect)  |
+        +------------------------+            +------------------------+
+                    |                                       |
+                    v                                       v
+        +------------------------+            +------------------------+
+        | Email Service /         |            | Redirect to Airline     |
+        | Manual Review Queue     |            | Official Page           |
+        +------------------------+            +------------------------+
                                     |
                                     v
                     +-------------------------------+
                     | Data Layer                    |
                     | case DB, audit log, evidence  |
                     +-------------------------------+
-                                    |
-                                    v
-                    +-------------------------------+
-                    | Manual Review Queue           |
-                    | human escalation only         |
-                    +-------------------------------+
+```
+
+### 5.2 Agent workflow flowchart
+
+```flowchart
+graph TD
+    A([Start]) --> B{User type}
+
+    %% Airlines branch
+    B -->|Airlines| C[User fills in complaint form]
+    C --> D[Agent `flight_verify` calls API with `flight_number` and `flight_date`]
+    D --> E[Calculate delay time if flight is delayed]
+    E --> F[Evaluate refund eligibility and return confidence score]
+    F --> G{Confidence score > 80?}
+    G -->|Yes| H[Agent `refund_decision` sends email to user]
+    G -->|No| I[Agent `refund_decision` invokes human moderation]
+
+    %% Passengers branch
+    B -->|Passengers| J[User talks with chatbot]
+    J --> K[Agent `flight_verify` calls API with `flight_number` and `flight_date`]
+    K --> L[Calculate delay time if flight is delayed]
+    L --> M[Evaluate refund eligibility and return result]
+    M --> N{Meets refund conditions?}
+    N -->|Yes| O[Redirect user to corresponding airline official complaint page]
+    N -->|No| P[Return conclusion to user]
 ```
 
 ---
@@ -139,103 +183,109 @@ Both products reuse the same backend logic:
 
 ### 6.1 Claims Orchestrator Service
 
-**Responsibility:** Coordinate the end-to-end case lifecycle and state transitions.
+**Responsibility:** Coordinate the end-to-end case lifecycle and route requests to the appropriate workflow (Airlines vs Passengers).
 
 **Key flows:**
-- Intake → Structuring → Verification → Eligibility check → Resolution
-- Conditional routing to manual review based on eligibility score or rule violations
+- **Airlines:** Intake → Flight Verification → Eligibility Evaluation → Refund Decision (email or escalation)
+- **Passengers:** Chatbot query → Flight Verification → Eligibility Evaluation → Redirect or conclusion
 - Event logging for each state transition
+- Conditional routing based on user type and eligibility score
 
 **State machine:**
 ```
-INTAKE → STRUCTURING → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL → 
-  → RESOLUTION → COMPLETE / ESCALATED
+INTAKE → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL → 
+  → REFUND_DECISION → COMPLETE / ESCALATED / REDIRECTED
 ```
 
 ---
 
-### 6.2 Agent 1: Intake & Structuring
+### 6.2 Agent: flight_verify
 
-**Responsibility:** Parse unstructured complaint text and extract structured facts.
+**Responsibility:** Validate flight facts, calculate delay, and evaluate EU261 eligibility. Returns both the verified data and eligibility score.
 
-**Inputs:** complaint text, claimant info, flight details
-**Outputs:** structured case JSON with:
-- claimant identity and contact
+**Inputs:** 
 - flight identifier (IATA code, date, route)
-- claimed delay (hours)
-- delay reason (if stated)
-- evidence attachments
+- claimant country (for EU jurisdiction check)
 
-**Implementation:** LLM-driven extraction with confidence scoring. Fallback to manual review if confidence < 70%.
+**Outputs:** 
+```json
+{
+  "verified_flight_data": {
+    "actual_departure": "ISO8601",
+    "scheduled_departure": "ISO8601",
+    "delay_hours": "number",
+    "reported_cause": "string"
+  },
+  "eligibility_result": {
+    "meets_3h_threshold": "boolean",
+    "extraordinary_circumstances": "boolean",
+    "compensation_eur": "number",
+    "confidence_score": "number (0-1)"
+  }
+}
+```
 
----
-
-### 6.3 Agent 2: Flight Verification
-
-**Responsibility:** Validate flight facts against authoritative data sources and detect extraordinary circumstances.
-
-**Inputs:** structured case with flight identifiers
-**Outputs:** verified flight data with:
-- actual departure/arrival times
-- scheduled times
-- delay duration (calculated)
-- reported cause (technical, weather, ATC, etc.)
-- extraordinary circumstance flag
+**Process:**
+1. Call Aviationstack API with flight number, date, and route
+2. Extract `scheduled_departure`, `actual_departure`, and `status`
+3. Calculate delay in hours
+4. Apply EU261 rule matrix to determine eligibility
+5. Generate confidence score based on data completeness and matching certainty
+6. Flag unverifiable cases (missing flight records, API errors) for escalation
 
 **Integration:** Aviationstack API (enterprise plan)
-- Query `/flights` endpoint by flight number, date, and origin/destination
-- Extract: `scheduled_departure`, `actual_departure`, `status`, `aircraft_type`
-- Fallback to scheduled times if actual times unavailable; confidence score accordingly
 - Cache flight records for 1 hour to minimize API calls (quota: 100k/month)
-- Flag unverifiable cases (missing flight records, API errors) for manual review
+- Fallback to scheduled times if actual times unavailable; adjust confidence accordingly
 
 ---
 
-### 6.4 Agent 3: EU261 Eligibility
+### 6.3 Agent: refund_decision
 
-**Responsibility:** Apply deterministic rules to establish compensation entitlement.
+**Responsibility:** Route the eligibility decision to appropriate next steps based on user type and confidence level.
 
-**Inputs:** verified flight facts, claimant location
-**Outputs:** eligibility decision with:
-- delay >= 3 hours: YES/NO
-- extraordinary circumstances exclusion: YES/NO
-- passenger location (EU / non-EU)
-- compensation amount (EUR)
-- applicable exemptions
+**Inputs:**
+- user_type: "AIRLINE" | "PASSENGER"
+- eligibility_result from `flight_verify`
+- claimant contact info (for email dispatch)
 
-**Rule matrix:**
+**Outputs (depends on user_type):**
+
+**For Airlines (confidence > 80%):**
+- Send automated email to claimant with compensation offer and EU261 justification
+- Log decision to audit trail
+
+**For Airlines (confidence ≤ 80%):**
+- Create manual review ticket
+- Route to KLM claims queue with evidence summary
+- Notify claims team via dashboard
+
+**For Passengers (eligible):**
+- Generate eligibility confirmation
+- Provide redirect URL to KLM official complaint page with pre-filled flight details
+- Log consent and redirect event
+
+**For Passengers (ineligible):**
+- Generate plain-language explanation (e.g., "Your flight was delayed by 2 hours; EU261 requires 3+ hours for compensation")
+- Provide additional help resources or appeal instructions
+
+---
+
+### 6.4 Rule Engine / Policy Service
+
+**Responsibility:** Centralized, versionable repository of EU261 rules and KLM policy thresholds.
+
+**Stored rules:**
+- delay thresholds and compensation tables
+- extraordinary circumstance codes and descriptions
+- confidence score thresholds for automated vs escalated decisions
+- escalation rules (e.g., missing evidence, API failures)
+
+**Eligibility rule matrix:**
 | Delay (hours) | EU261 eligible | Extraordinary | Compensation |
 |---|---|---|---|
 | < 3 | NO | — | €0 |
 | 3–≤4 | YES | if not | €250 |
 | > 4 | YES | if not | €400–€600 (by distance) |
-
----
-
-### 6.5 Agent 4: Resolution & Explanation
-
-**Responsibility:** Generate clear, user-appropriate decision narrative and next-action recommendations.
-
-**Outputs by audience:**
-- **For KLM staff:** decision summary, evidence chain, escalation triggers, compliance notes
-- **For passengers:** plain-language eligibility statement, compensation estimate, next steps
-
-**Templates:**
-- eligible + simple: "You are entitled to €250 compensation. KLM will contact you within 14 days."
-- ineligible + reason: "Your flight delay was caused by extraordinary circumstances (severe weather). EU261 does not apply."
-- under review: "Your claim requires manual review. You will hear from us within 5 business days."
-
----
-
-### 6.6 Rule Engine / Policy Service
-
-**Responsibility:** Centralized, versionable repository of EU261 rules, KLM policy overrides, and thresholds.
-
-**Stored rules:**
-- delay thresholds and compensation tables
-- extraordinary circumstance codes and descriptions
-- exclusion criteria (e.g., connection losses, booked > 2 weeks prior)
-- escalation rules (e.g., missing evidence, complex cases)
 
 **Interface:** RESTful rule lookup service; audit trail on all rule changes.
 
@@ -260,7 +310,8 @@ INTAKE → STRUCTURING → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL →
   "case": {
     "id": "uuid",
     "created_at": "ISO8601",
-    "state": "INTAKE | STRUCTURING | FLIGHT_VERIFICATION | ELIGIBILITY_EVAL | RESOLUTION | COMPLETE | ESCALATED",
+    "user_type": "AIRLINE | PASSENGER",
+    "state": "INTAKE | FLIGHT_VERIFICATION | ELIGIBILITY_EVAL | REFUND_DECISION | COMPLETE | ESCALATED | REDIRECTED",
     "claimant": {
       "name": "string",
       "email": "string",
@@ -272,18 +323,26 @@ INTAKE → STRUCTURING → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL →
       "actual_departure": "ISO8601",
       "route": "IATA-IATA"
     },
-    "eligibility": {
+    "flight_verification": {
       "delay_hours": "number",
+      "actual_departure": "ISO8601",
+      "scheduled_departure": "ISO8601",
+      "reported_cause": "string"
+    },
+    "eligibility": {
       "meets_3h_threshold": "boolean",
       "extraordinary_circumstances": "boolean",
       "compensation_eur": "number",
-      "confidence": "number (0-1)"
+      "confidence_score": "number (0-1)"
     },
     "decision": {
-      "eligible": "boolean",
+      "type": "APPROVED | DENIED | ESCALATED | REDIRECTED",
       "reason_code": "string",
       "narrative": "string",
-      "recommended_action": "APPROVE | DENY | ESCALATE"
+      "user_type_action": {
+        "AIRLINE": "EMAIL | MANUAL_REVIEW",
+        "PASSENGER": "REDIRECT | CONCLUSION"
+      }
     }
   }
 }
@@ -291,44 +350,97 @@ INTAKE → STRUCTURING → FLIGHT_VERIFICATION → ELIGIBILITY_EVAL →
 
 ---
 
-## 8. LLM reasoning pipeline
+## 8. Agent implementation strategy
 
-**Model:** Claude (or equivalent) for structured extraction and explanation generation.
+### 8.1 Agent: flight_verify
 
-**Prompting strategy:**
-1. **Extraction:** Zero-shot prompting with JSON schema for fact extraction from complaints
-2. **Verification:** Chain-of-thought to cross-check flight data and rule logic
-3. **Explanation:** Few-shot examples of clear, compliant decision narratives
+**Implementation approach:**
+- Deterministic flight data retrieval from Aviationstack API
+- Rule-engine-based EU261 eligibility evaluation (no LLM)
+- Confidence scoring based on:
+  - Data completeness (actual vs. estimated times)
+  - Flight record match certainty
+  - API response quality
 
-**Safeguards:**
-- No direct compensation claims; all eligibility decisions flow through rule engine
-- Confidence scoring on extractions; low confidence triggers escalation
-- All outputs validated against rule engine output before presentation
+**Process:**
+1. Validate flight identifiers and date format
+2. Query Aviationstack `/flights` endpoint
+3. Parse response: extract `scheduled_departure`, `actual_departure`, `status`
+4. Calculate `delay_hours = (actual_departure - scheduled_departure) / 60 minutes`
+5. Apply rule matrix:
+   - If delay_hours >= 3 AND no extraordinary circumstances → ELIGIBLE
+   - If delay_hours < 3 → INELIGIBLE
+   - Extraordinary circumstances detected → FLAG for review
+6. Generate confidence score (0-1 scale):
+   - 1.0 = confirmed actual times
+   - 0.8 = using estimated times
+   - 0.5 = partial data, API errors
+7. Return structured result
+
+### 8.2 Agent: refund_decision
+
+**Implementation approach:**
+- Stateless decision dispatcher
+- Template-based action generation
+- User-type-aware routing
+
+**For Airlines (internal moderation):**
+- If confidence_score > 0.8 AND eligible: send automated email with compensation offer
+- If confidence_score ≤ 0.8 OR edge cases: create manual review ticket and notify claims team
+- Always log decision and send confirmation email to claimant
+
+**For Passengers (public-facing guidance):**
+- If eligible: generate eligibility confirmation and redirect URL to KLM complaints page
+- If ineligible: generate plain-language explanation with reason code
+- Log interaction for compliance audit
 
 ---
 
 ## 9. API contracts
 
-### 9.1 Create claim
+### 9.1 Airlines workflow: Create complaint claim
 ```
-POST /v1/claims
+POST /v1/airlines/claims
 {
   "complaint_text": "string",
   "claimant": { "name", "email", "country" },
+  "flight_number": "string",
+  "flight_date": "ISO8601",
   "attachments": ["url"]
 }
-→ 202 { "case_id": "uuid", "status_url": "/cases/{id}" }
+→ 202 { "case_id": "uuid", "status_url": "/claims/{id}" }
 ```
 
-### 9.2 Get claim status
+### 9.2 Passengers workflow: Chat query
 ```
-GET /v1/cases/{id}
-→ 200 { "state", "eligibility", "decision", "next_steps" }
+POST /v1/passengers/eligibility-check
+{
+  "flight_number": "string",
+  "flight_date": "ISO8601",
+  "claimant": { "email": "string", "country": "ISO3166" }
+}
+→ 200 {
+  "eligible": "boolean",
+  "compensation_eur": "number",
+  "redirect_url": "string | null",
+  "explanation": "string"
+}
 ```
 
-### 9.3 (KLM internal) Escalate to manual review
+### 9.3 Get case status (Airlines)
 ```
-POST /v1/cases/{id}/escalate
+GET /v1/airlines/claims/{id}
+→ 200 {
+  "state": "string",
+  "eligibility": { ... },
+  "decision_action": "EMAIL | MANUAL_REVIEW",
+  "next_steps": "string"
+}
+```
+
+### 9.4 (KLM internal) Escalate to manual review
+```
+POST /v1/airlines/claims/{id}/escalate
 { "reason": "string", "priority": "HIGH | NORMAL" }
 → 200 { "escalated_to": "queue_id" }
 ```
@@ -359,7 +471,7 @@ POST /v1/cases/{id}/escalate
 **Cloud Run configuration:**
 - API Gateway on Cloud Run (autoscale 0–100 instances, CPU: 2, memory: 2GB)
 - Claims Orchestrator on Cloud Run (autoscale 1–50 instances, CPU: 2, memory: 4GB)
-- Agents (1–4) on Cloud Run (autoscale 1–20 instances per agent, CPU: 2, memory: 2GB)
+- Agents (flight-verify, refund-decision) on Cloud Run (autoscale 1–20 instances per agent, CPU: 2, memory: 2GB)
 - Cloud SQL connection pooling via Cloud SQL Auth proxy
 - Logging to Cloud Logging; structured JSON logs for audit trail
 
@@ -370,8 +482,9 @@ POST /v1/cases/{id}/escalate
 
 **Monitoring:**
 - Cloud Monitoring dashboards: request latency, error rate, agent execution time
-- Case decision latency SLA: p95 < 5 seconds for intake + structuring
-- Manual escalation rate: target < 5% of cases
+- Case decision latency SLA: p95 < 2 seconds for flight_verify + refund_decision
+- Manual escalation rate: target < 5% of cases (Airlines workflow)
+- Redirect rate: target > 80% of passenger queries
 - Audit log completeness: 100% (enforced at DB layer)
 - Alerting on Aviationstack API quota usage, API errors
 
@@ -394,37 +507,35 @@ claimjet/
 │   │   └── cloud-run.ts               # Cloud Run config
 │   │
 │   ├── controllers/
-│   │   ├── claims.controller.ts       # POST /claims, GET /cases/{id}
-│   │   ├── escalation.controller.ts   # POST /cases/{id}/escalate
-│   │   └── health.controller.ts       # Health checks
+│   │   ├── airlines.controller.ts      # POST /airlines/claims, POST /airlines/claims/{id}/escalate
+│   │   ├── passengers.controller.ts    # POST /passengers/eligibility-check
+│   │   └── health.controller.ts        # Health checks
 │   │
 │   ├── services/
-│   │   ├── claims.service.ts          # Orchestrator: case routing & state machine
+│   │   ├── claims-orchestrator.service.ts  # Routes to airline/passenger workflows
+│   │   ├── airline-workflow.service.ts     # Complaint moderation flow
+│   │   ├── passenger-workflow.service.ts   # Eligibility guidance flow
 │   │   └── external/
-│   │       ├── aviationstack.service.ts  # Flight verification API client
-│   │       ├── claude.service.ts         # LLM inference client
-│   │       └── cache.service.ts          # Redis operations
+│   │       ├── aviationstack.service.ts    # Flight verification API client
+│   │       ├── email.service.ts            # Email dispatch
+│   │       └── cache.service.ts            # Redis operations
 │   │
 │   ├── agents/
-│   │   ├── agent1-intake/
-│   │   │   ├── intake.agent.ts        # LLM extraction logic
-│   │   │   ├── intake.schema.ts       # JSON schema for structured output
-│   │   │   └── intake.test.ts
-│   │   ├── agent2-verification/
-│   │   │   ├── verification.agent.ts  # Flight data + confidence scoring
-│   │   │   ├── aviationstack.adapter.ts
-│   │   │   └── verification.test.ts
-│   │   ├── agent3-eligibility/
-│   │   │   ├── eligibility.agent.ts   # EU261 rule engine
-│   │   │   ├── rules.engine.ts        # Deterministic rules
-│   │   │   └── eligibility.test.ts
-│   │   └── agent4-resolution/
-│   │       ├── resolution.agent.ts    # Narrative generation
+│   │   ├── flight-verify/
+│   │   │   ├── flight-verify.agent.ts      # Flight API + eligibility evaluation
+│   │   │   ├── aviationstack.adapter.ts    # Aviationstack API client
+│   │   │   ├── rules.engine.ts             # EU261 rule matrix evaluation
+│   │   │   ├── confidence.calculator.ts    # Confidence scoring logic
+│   │   │   └── flight-verify.test.ts
+│   │   └── refund-decision/
+│   │       ├── refund-decision.agent.ts    # Decision routing by user type
+│   │       ├── email.dispatcher.ts         # Email service for airlines
+│   │       ├── redirect.generator.ts       # Redirect URL generation for passengers
 │   │       ├── templates/
-│   │       │   ├── eligible.hbs
-│   │       │   ├── ineligible.hbs
-│   │       │   └── escalated.hbs
-│   │       └── resolution.test.ts
+│   │       │   ├── eligible-email.hbs
+│   │       │   ├── ineligible-conclusion.hbs
+│   │       │   └── escalation-notice.hbs
+│   │       └── refund-decision.test.ts
 │   │
 │   ├── models/
 │   │   ├── case.model.ts              # Case entity + schema
@@ -544,19 +655,22 @@ PostgreSQL / Redis
 ## 13. Testing strategy
 
 ### 13.1 Unit tests
-- LLM extraction accuracy on 50+ real complaint samples
-- Rule engine matrix coverage (all delay/circumstance combinations)
-- State machine transitions (happy path + edge cases)
+- **flight_verify agent:** Flight API integration with mock data; rule matrix coverage (all delay thresholds); confidence scoring logic
+- **refund_decision agent:** Decision routing by user type (airline vs passenger); email template rendering; redirect URL generation
+- Rule engine: all EU261 eligibility combinations (delay, extraordinary circumstances)
 
-### 12.2 Integration tests
-- End-to-end claim lifecycle (intake → resolution)
-- Flight verification with mock data sources
-- Rule engine + LLM consistency (decisions match expected outcomes)
+### 13.2 Integration tests
+- **Airline workflow:** complaint intake → flight_verify → eligibility → refund_decision (email path)
+- **Airline workflow (escalation):** low confidence score → refund_decision (manual review path)
+- **Passenger workflow:** eligibility check query → flight_verify → eligibility → refund_decision (redirect path)
+- Flight verification with mock Aviationstack responses
+- Email dispatch and redirect URL generation
 
 ### 13.3 Compliance tests
-- GDPR data retention and deletion
-- audit logging completeness
-- decision explainability (staff can trace every rule applied)
+- GDPR data retention and deletion policies
+- Audit logging completeness: all decisions logged with reasoning
+- Decision explainability: KLM staff can trace every rule applied
+- Confidence score accuracy and calibration
 
 ---
 
@@ -564,21 +678,34 @@ PostgreSQL / Redis
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| LLM hallucination damages claim accuracy | HIGH | Confidence scoring; systematic prompt validation; human review threshold |
+| Aviationstack API quota exceeded or service outage | MEDIUM | Cache flight data; graceful fallback to escalation; quota monitoring |
 | Rule changes break historical decision reproducibility | MEDIUM | Immutable rule versioning; audit trail; test suite before deployment |
-| High manual escalation rate blocks workflow | MEDIUM | Progressive confidence threshold tuning; escalation SLA monitoring |
-| Data loss or audit log corruption | HIGH | encrypted backups; read-only audit table; point-in-time recovery testing |
-| False negatives (system denies eligible passengers) | CRITICAL | Conservative thresholds; passenger appeal channel; periodic decision audits |
+| High manual escalation rate (airlines) blocks workflow | MEDIUM | Confidence threshold tuning; SLA monitoring; escalation queue management |
+| Passenger confusion on eligibility (low confidence redirect) | MEDIUM | Clear explanation templates; help resources; appeal channel |
+| Data loss or audit log corruption | HIGH | Encrypted backups; read-only audit table; point-in-time recovery testing |
+| False negatives (system denies eligible passengers) | CRITICAL | Conservative thresholds; regular decision audits; passenger appeal process |
 
 ---
 
 ## 15. Success metrics
 
-- **Automation rate:** > 85% of cases resolved without manual intervention
-- **Decision consistency:** inter-rater agreement > 95% (staff review audit sample)
-- **Passenger satisfaction:** NPS > 50 on eligible claim resolution
-- **Operational efficiency:** average case decision time < 2 minutes
+### Airlines workflow
+- **Automation rate:** > 85% of cases resolved without manual intervention (confidence > 80%)
+- **Manual escalation rate:** < 15% of cases
+- **Decision consistency:** inter-rater agreement > 95% on sample audits
+- **Case decision latency:** p95 < 2 seconds (flight_verify + refund_decision)
+- **Email delivery success:** > 99% of automated emails delivered
+
+### Passengers workflow
+- **Eligibility guidance accuracy:** > 95% match with manual review
+- **Redirect successful:** > 80% of eligible passengers successfully redirected
+- **User satisfaction:** NPS > 50 on eligibility guidance
+- **Query response latency:** < 1 second average
+
+### Overall
+- **Operational efficiency:** average case decision time < 2 minutes (airlines)
 - **Compliance:** zero audit findings on decision traceability
+- **Aviationstack API uptime:** > 99.5%
 
 ---
 
